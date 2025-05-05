@@ -2,6 +2,9 @@
   (:gen-class))
 
 (defn- main [& args]
-  (print "hello world")
-  (print args)
+  (println "hello world")
+  (println args)
+  (.flush *out*)
   (System/exit 0))
+
+(apply main *command-line-args*)

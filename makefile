@@ -10,6 +10,8 @@ build:
 	mkdir -p $(OUT_DIR)
 	java -cp "$(CLASSPATH)" clojure.main -e "(compile 'compiler.core)"
 
+interpret:
+	java -cp "$(CLASSPATH)" clojure.main $(SRC_DIR)/compiler/core.clj justSomeArg
 
 run:
 	java -cp "$(CLASSPATH)" compiler.core
