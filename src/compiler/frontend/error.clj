@@ -2,19 +2,11 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.set :as set]))
 
-(defprotocol WithError
-  (add-error [thing error] "annotate thing with the error.")
-  (collect-errors [thing] "return a set of all errors that thing has."))
+(s/def ::phase keyword?)
+(s/def ::severity keyword?)
+(s/def ::message (s/keys :req [::phase ::severity]))
+(s/def ::errors (s/coll-of ::message))
 
-(defprotocol ErrorMessage
-  (add-position [this span source-string])
-  (add-phase [this phase]))
-
-(defrecord StringMessageError [message]
-  ErrorMessage
-  (add-position [this span source-string]
-    (assoc this ::span span)
-    (assoc this ::source-string source-string))
-  (add-phase [this phase]
-    (assoc this ::phase phase)))
-
+(defn add-error [this error]
+  (assoc this ::errors (set/union #{error}
+                                  (::errors this))))

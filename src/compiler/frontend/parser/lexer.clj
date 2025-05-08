@@ -1,19 +1,15 @@
 (ns compiler.frontend.parser.lexer
-  (:require [compiler.frontend.error :as err]
+  (:require [clojure.edn :as edn]
+            [clojure.spec.alpha :as s]
+            [compiler.frontend.error :as err]
             [compiler.frontend.parser.input :as in]
-            [clojure.set :as set]
-            [clojure.edn :as edn]
             [compiler.frontend.position :as pos]))
 
-(defrecord Token [class kind source-string span]
-  err/WithError
-  (add-error [this error]
-    (assoc this ::err/errors (set/union #{(err/add-position error span source-string)}
-                                        (::err/errors this))))
-  (collect-errors [this] (::err/errors this)))
-
-(defn- add-error [token error]
-  (err/add-error token (err/add-phase error ::lexer)))
+(s/def ::class keyword?)
+(s/def ::kind keyword?)
+(s/def ::source-string string?)
+(s/def ::token (s/keys :req [::class ::kind ::source-string ::pos/span]
+                       :opt [::err/errors]))
 
 (defn- skip-spaces [input]
   (if (#{\space \tab \newline \return} (in/current input))
@@ -29,11 +25,10 @@
 (defn- make-one-char-token [input token-class]
   "creates a token that contains the current character of the input.
    the token gets the given class and an :undefined kind"
-  [(Token. token-class
-           :unknown
-           (str (in/current input))
-           (pos/span-to (in/current-position input)
-                        (in/current-position (in/move input))))
+  [{::class token-class
+    ::source-string (str (in/current input))
+    ::pos/span (pos/span-from-to (in/current-position input)
+                                 (in/current-position (in/move input)))}
    (in/move input)])
 
 (defn- make-multi-char-token
@@ -54,28 +49,25 @@
         (recur (conj prefix char)
                (in/move cur-in)
                next-state)
-        [(Token. token-class 
-                 :unknown
-                 (apply str prefix)
-                 (pos/span-to (in/current-position input)
-                              (in/current-position cur-in)))
+        [{::class token-class
+          ::source-string (apply str prefix)
+          ::pos/span (pos/span-from-to (in/current-position input)
+                                   (in/current-position cur-in))}
          cur-in]))))
 
-(defn- no-state-pred 
+(defn- no-state-pred
   "creates a state function from the given predicate that has no state.
    Ignores the given state and just applies the predicate to the character."
   [predicate]
   (fn [char state] (predicate char)))
 
-(def operator-char? (one-of-pred "+-*/!?~%.<>=&^|:"))
-
 (defn- identifier-start? [char]
-  (and 
+  (and
    (char? char)
    (or (Character/isLetter char) (= \_ char))))
 
 (defn- identifier-char? [char]
-  (and (char? char) 
+  (and (char? char)
        (or (Character/isLetterOrDigit char) (= \_ char))))
 
 (defn- optional-trailing-assignment []
@@ -121,13 +113,13 @@
         (recur rest (conj tokens next))
         tokens))))
 
-(defmulti postprocess-token :class)
+(defmulti postprocess-token ::class)
 
 (defn- add-kind [token kind]
-  (assoc token :kind kind))
+  (assoc token ::kind kind))
 
 (defmethod postprocess-token ::separator [token]
-  (case (:source-string token)
+  (case (::source-string token)
     "(" (add-kind token ::left-parentheses)
     ")" (add-kind token ::right-parentheses)
     "{" (add-kind token ::left-brace)
@@ -135,7 +127,7 @@
     ";" (add-kind token ::semicolon)))
 
 (defmethod postprocess-token ::operator [token]
-  (case (:source-string token)
+  (case (::source-string token)
     "+" (add-kind token ::plus)
     "+=" (add-kind token ::plus-assign)
     "-" (add-kind token ::minus)
@@ -147,36 +139,51 @@
     "%" (add-kind token ::mod)
     "%=" (add-kind token ::mod-assign)))
 
-(defn- read-number [string]
-  (try
-    (let [parsed (edn/read-string string)])
-    (catch Exception e )))
-
 (defmethod postprocess-token ::numerical-constant [token]
-  (let [error (err/->StringMessageError "illegal number format")]
+  (let [error {::err/phase ::lexer
+               ::err/severity ::error
+               :msg "illegal number format"}
+        token (assoc token ::kind ::numerical-constant)]
     (try
-      (let [parsed (edn/read-string (:source-string token))]
+      (let [parsed (edn/read-string (::source-string token))]
         (if (integer? parsed)
-          (add-kind (assoc token :value parsed)
-                    ::numerical-constant)
-          (add-error token error)))
-      (catch Exception e (add-error token error)))))
+          (assoc token ::value parsed)
+          (err/add-error token error)))
+      (catch Exception e (err/add-error token error)))))
 
 
 (def ^:private keywords ["struct" "if" "else" "while" "for" "continue" "break" "return" "assert" "true" "false" "NULL" "print" "read" "alloc" "alloc_array" "int" "bool"
                          "void" "char" "string"])
 
 (defmethod postprocess-token ::identifier [token]
-  (if (some #(= % (:source-string token)) keywords)
+  (cond
+    (some #(= % (::source-string token)) keywords)
     (assoc token
-           :class ::keyword
-           :kind (keyword (str *ns*) (:source-string token)))
-    (add-kind token ::identifier)))
+           ::class ::keyword
+           ::kind (keyword (str *ns*) (::source-string token)))
+
+    (every? (fn [c] (or (<= (int \a) (int c) (int \z))
+                        (<= (int \A) (int c) (int \Z))
+                        (<= (int \0) (int c) (int \9))
+                        (= c \_))) (::source-string token))
+    (assoc token
+           ::kind ::identifier)
+    
+    :else 
+    (err/add-error token {::err/phase ::lexer
+                          ::err/severity ::error
+                          :msg "identifiers can only contain the characters a-z, A-Z, 0-9 and _"})))
 
 (defmethod postprocess-token ::error [token]
   (err/add-error
    (add-kind token ::error)
-   (err/->StringMessageError "illegal character")))
+   {::err/phase ::lexer
+    ::err/severity ::error
+    :msg "illegal character"}))
 
 (defn lex [string]
   (map postprocess-token (lex-string string)))
+
+(s/fdef lex
+  :args (s/cat :string string?)
+  :ret (s/coll-of ::token))

@@ -18,7 +18,7 @@
   (following [this] (get string (inc index)))
   (move [this]
     (if (newline? (current this))
-      (StringInput. string (pos/nextline position) (inc index))
+      (StringInput. string (pos/next-line position) (inc index))
       (StringInput. string (pos/move position) (inc index))))
   (move [this n]
     (cond
@@ -27,4 +27,4 @@
       (move (move this) (dec n)))))
 
 (defn make-string-input [string]
-  (->StringInput string (pos/->FilePosition 1 1) 0))
+  (->StringInput string pos/initial-position 0))

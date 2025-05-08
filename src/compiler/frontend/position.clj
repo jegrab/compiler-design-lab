@@ -1,18 +1,24 @@
-(ns compiler.frontend.position)
+(ns compiler.frontend.position
+  (:require [clojure.spec.alpha :as s]))
 
-(defprotocol Position
-  "A position in the source code. Has line and column."
-  (move [this] [this n] "increases the column of the position by n (default 1).")
-  (nextline [this] "move to start of next line.")
-  (span-to [this other] "creates a Span from this to other"))
+(s/def ::line integer?)
+(s/def ::column integer?)
+(s/def ::position (s/keys :req [::line ::column]))
+(s/def ::start ::position)
+(s/def ::end ::position)
+(s/def ::span (s/keys :req [::start ::end]))
 
-(defprotocol Span)
+(defn move
+  "increases the column of the position by n (default 1)."
+  ([pos] (update pos ::column inc))
+  ([pos n] (update pos ::column #(+ n %))))
 
-(defrecord FileSpan [start end])
+(defn next-line
+  "move the position to start of next line. (increase the line and set the column to 1)"
+  [pos] (assoc pos
+               ::column 1
+               ::line (inc (::line pos))))
 
-(defrecord FilePosition [^Integer line ^Integer column]
-  Position
-  (move [this] (FilePosition. line (inc column)))
-  (move [this n] (FilePosition. line (+ column n)))
-  (nextline [this] (FilePosition. (inc line) 1))
-  (span-to [this other] (FileSpan. this other)))
+(defn span-from-to [start end] {::start start ::end end})
+
+(def initial-position {::line 1 ::column 1})
