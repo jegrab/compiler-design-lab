@@ -2,3 +2,6 @@
 .clj-kondo
 .cpcache
 .nrepl-port
+.lsp
+
+test-programs

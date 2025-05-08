@@ -9,3 +9,4 @@
 
 ## test case ideas
 00 is not a valid token => should lead to parser error
+--<expr> is valid and is -(-(<expr>)). does not mutate.
