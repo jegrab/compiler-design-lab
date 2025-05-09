@@ -11,8 +11,10 @@
 (s/def ::token (s/keys :req [::class ::kind ::source-string ::pos/span]
                        :opt [::err/errors]))
 
+(def space-char #{\space \tab \newline \return})
+
 (defn- skip-spaces [input]
-  (if (#{\space \tab \newline \return} (in/current input))
+  (if (space-char (in/current input))
     (skip-spaces (in/move input))
     input))
 
@@ -128,6 +130,7 @@
 
 (defmethod postprocess-token ::operator [token]
   (case (::source-string token)
+    "=" (add-kind token ::assign)
     "+" (add-kind token ::plus)
     "+=" (add-kind token ::plus-assign)
     "-" (add-kind token ::minus)
@@ -168,11 +171,12 @@
                         (= c \_))) (::source-string token))
     (assoc token
            ::kind ::identifier)
-    
-    :else 
-    (err/add-error token {::err/phase ::lexer
-                          ::err/severity ::error
-                          :msg "identifiers can only contain the characters a-z, A-Z, 0-9 and _"})))
+
+    :else
+    (assoc (err/add-error token {::err/phase ::lexer
+                                 ::err/severity ::error
+                                 :msg "identifiers can only contain the characters a-z, A-Z, 0-9 and _"})
+           ::kind ::identifier)))
 
 (defmethod postprocess-token ::error [token]
   (err/add-error
@@ -185,5 +189,7 @@
   (map postprocess-token (lex-string string)))
 
 (s/fdef lex
-  :args (s/cat :string string?)
-  :ret (s/coll-of ::token))
+  :args (s/cat :string ::source-string)
+  :ret (s/coll-of ::token)
+  :fn #(= (apply str (filter (fn [c ] (not (space-char c))) (-> % :args :string)))
+          (apply str (map ::source-string (:ret %)))))

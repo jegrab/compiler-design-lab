@@ -1,7 +1,8 @@
 (require '[clojure.spec.alpha :as s]
          '[clojure.spec.gen.alpha :as gen]
          '[clojure.spec.test.alpha :as stest]
-         '[compiler.frontend.parser.lexer :as lex])
+         '[compiler.frontend.parser.lexer :as lex]
+         '[compiler.frontend.parser.combinator :as comb])
 
 
 
@@ -15,10 +16,12 @@
                                      (gen/elements [\! \@ \# \$ \% \^ \& \* \- \_ \= \+])])
                         0 1000)))
 
-(s/def string?
+(s/def ::lex/source-string
   (s/with-gen string?
     (fn [] source-string-gen)))
 
-(gen/sample (s/gen ::custom-string))
+
+(gen/sample (s/gen ::lex/source-string))
 
 (stest/check `lex/lex)
+
