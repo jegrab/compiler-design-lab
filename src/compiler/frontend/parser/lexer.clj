@@ -150,7 +150,7 @@
     (try
       (let [parsed (edn/read-string (::source-string token))]
         (if (integer? parsed)
-          (assoc token ::value parsed)
+          (assoc token :value parsed)
           (err/add-error token error)))
       (catch Exception e (err/add-error token error)))))
 
@@ -170,13 +170,15 @@
                         (<= (int \0) (int c) (int \9))
                         (= c \_))) (::source-string token))
     (assoc token
-           ::kind ::identifier)
+           ::kind ::identifier
+           :name (::source-string token))
 
     :else
     (assoc (err/add-error token {::err/phase ::lexer
                                  ::err/severity ::error
                                  :msg "identifiers can only contain the characters a-z, A-Z, 0-9 and _"})
-           ::kind ::identifier)))
+           ::kind ::identifier
+           :name (::source-string token))))
 
 (defmethod postprocess-token ::error [token]
   (err/add-error

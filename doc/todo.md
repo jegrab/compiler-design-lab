@@ -1,7 +1,8 @@
 # todos
 
-## Possible errors:
+## (Possible) errors:
 - new line convention: CR LF vs Lf
+- in the lexer, 0123 is currently read as 0 123 and should be as 123.
 
 ## Better Building
 - use maven/gradle/... to download the jar for clojure instead of having it in the repo.

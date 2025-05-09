@@ -25,3 +25,4 @@
 
 (stest/check `lex/lex)
 
+(stest/check `comb/fail)
