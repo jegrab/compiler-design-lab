@@ -1,4 +1,4 @@
-(ns compiler.frontend.error
+(ns compiler.frontend.common.error
   (:require [clojure.spec.alpha :as s]
             [clojure.set :as set]))
 

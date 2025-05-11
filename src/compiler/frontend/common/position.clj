@@ -1,4 +1,4 @@
-(ns compiler.frontend.position
+(ns compiler.frontend.common.position
   (:require [clojure.spec.alpha :as s]))
 
 (s/def ::line integer?)
