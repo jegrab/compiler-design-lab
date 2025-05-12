@@ -16,3 +16,14 @@
     this
     (assoc this ::errors (set/union errors
                                     (::errors this)))))
+
+
+(defn make-parser-error [message] 
+  {::phase ::parser
+   ::severity ::error
+   ::message message})
+
+(defn make-semantic-error [message]
+  {::phase ::semantic-analysis
+   ::severity ::error
+   ::message message})

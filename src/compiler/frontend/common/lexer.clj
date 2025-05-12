@@ -101,8 +101,11 @@
     (one-of-pred "(){};") (make-one-char-token input ::separator)
     #(= % \=) (make-one-char-token input ::operator)
     (one-of-pred "+-*/%") (make-multi-char-token input ::operator (optional-trailing-assignment))
-    #(= % \0) (make-multi-char-token input ::numerical-constant (starting-with-zero))
-    (one-of-pred "123456789") (make-multi-char-token input ::numerical-constant (no-state-pred (one-of-pred "0123456789")))
+    #(= % \0) (assoc-in (make-multi-char-token input ::numerical-constant (starting-with-zero))
+                        [0 ::num-kind] ::hex)
+    (one-of-pred "123456789") (assoc-in
+                               (make-multi-char-token input ::numerical-constant (no-state-pred (one-of-pred "0123456789")))
+                               [0 ::num-kind] ::dec)
     ;operator-char? (make-multi-char-token input ::operator (no-state-pred operator-char?))
     identifier-start? (make-multi-char-token input ::identifier (no-state-pred identifier-char?))
     (make-one-char-token input ::error)))

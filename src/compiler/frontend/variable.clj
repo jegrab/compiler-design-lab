@@ -3,12 +3,38 @@
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.parser :as p]
             [compiler.frontend.expression :as expr]
-            [compiler.frontend.statement :as stmt]))0
+            [compiler.frontend.statement :as stmt]
+            [compiler.frontend.common.error :as err])) 0
 
 (defn- token [kind]
   (fn [tok]
     (= (::lex/kind tok) kind)))
-                                                    
+
+(defn- id-node [name]
+  {::ast/kind ::identifier
+   ::ast/children []
+   ::name name})
+
+(p/def-op expr/parse-expr identifier
+  [i (token ::lex/identifier)]
+  (id-node (::lex/source-string i)))
+
+(defmethod ast/pretty-print ::identifier [id] :else (str (::name id)))
+
+(defmethod ast/semantic-analysis ::identifier [id state]
+  (let [var-data ((::env state) (::name id))]
+    [(cond
+       (not var-data)
+       (err/add-error id (err/make-semantic-error (str "accessing unknown variable " (::name id))))
+
+       (not (::initialized var-data))
+       (err/add-error id (err/make-semantic-error (str "accessing variable " (::name id) " before initializing it.")))
+
+       :else
+       (assoc id
+              ::expr/type (::type var-data)
+              ::id (::id var-data)))
+     state]))
 
 (p/defrule stmt/parse-statement
   [type (token ::lex/int)
@@ -20,7 +46,88 @@
   {::ast/kind ::declare
    ::ast/children [::value]
    ::value value
+   ::type :int
    ::name (::lex/source-string name)})
-                                                    
+
 (defmethod ast/pretty-print ::declare [decl]
-  (str "int " (::name decl) (if (::value decl) (str " = "(ast/pretty-print (::value decl))) "") ";"))
+  (str "int " (::name decl) (if (::value decl) (str " = " (ast/pretty-print (::value decl))) "") ";"))
+
+(defmethod ast/semantic-analysis ::declare [decl state]
+  (let [[new-val state-afte-val] (if (::value decl)
+                                   (ast/semantic-analysis (::value decl) state)
+                                   [nil state])
+        initialized (if (::value decl) true false)
+        new-state (update state-afte-val
+                          ::env (fn [old-env] (assoc old-env
+                                                     (::name decl)
+                                                     {::type (::type decl)
+                                                      ::id (java.util.UUID/randomUUID)
+                                                      ::initialized initialized})))
+        new-decl (assoc decl ::value new-val)]
+    [(if (and new-val (not= (::type decl) (::expr/type new-val)))
+       (err/add-error new-decl (err/make-semantic-error (str "type mismatch. Declared " (::type decl) " but given " (::expr/type new-val))))
+       new-decl) 
+     new-state]))
+
+
+(p/defmultiparser asnop-parser)
+(p/defrule asnop-parser [_ (token ::lex/assign)] ::assign)
+(p/defrule asnop-parser [_ (token ::lex/plus-assign)] ::plus-assign)
+(p/defrule asnop-parser [_ (token ::lex/minus-assign)] ::minus-assign)
+(p/defrule asnop-parser [_ (token ::lex/mul-assign)] ::mul-assign)
+(p/defrule asnop-parser [_ (token ::lex/div-assign)] ::div-assign)
+(p/defrule asnop-parser [_ (token ::lex/mod-assign)] ::mod-assign)
+
+
+(defmulti is-l-value ::ast/kind)
+(defmethod is-l-value :default [_] false)
+(defmethod is-l-value ::identifier [_] true)
+
+
+(p/defrule stmt/parse-statement
+  [lv expr/parse-expr
+   asnop asnop-parser
+   expr expr/parse-expr
+   _ (token ::lex/semicolon)]
+  {::ast/kind ::asnop
+   ::ast/children [::l-value ::expr]
+   ::l-value (if (is-l-value lv)
+               lv
+               (err/add-error lv (err/make-parser-error (str (ast/pretty-print lv) " is not an l-value"))))
+   ::asnop asnop
+   ::expr expr})
+
+(defmethod ast/pretty-print ::asnop [asnop]
+  (str (ast/pretty-print (::l-value asnop))
+       (case (::asnop asnop)
+         ::assign "="
+         ::plus-assign "+="
+         ::minus-assign "-="
+         ::mul-assign "*="
+         ::div-assign "/="
+         ::mod-assign "%=")
+       (ast/pretty-print (::expr asnop))
+       ";"))
+
+(defn- check-type-match [asnop]
+  (if (= (::expr/type (::l-value asnop))
+         (::expr/type (::expr asnop)))
+    asnop
+    (err/add-error asnop (err/make-semantic-error (str "type mismatch: assigning " (::expr/type (::expr asnop)) " to " (::expr/type (::l-value asnop))) ))))
+
+(defn- check-if-int-op [asnop]
+  (if (and (#{::plus-assign ::minus-assign ::mul-assign ::div-assign ::mod-assign} (::asnop asnop))
+           (not (= :int (::expr/type (::expr asnop)))))
+    (err/add-error asnop (err/make-semantic-error (str "type mismatch: operator " (::asnop asnop) " works only on type int. but has type " (::type (::expr asnop)))))
+    asnop))
+
+(defmethod ast/semantic-analysis ::asnop [asnop state]
+  (let [[new-e state-after-e] (ast/semantic-analysis (::expr asnop) state)
+        [new-l state-after-l] (ast/semantic-analysis (::l-value asnop) state-after-e)
+        new-asnop (assoc asnop
+                         ::l-value new-l
+                         ::expr new-e)]
+    [(-> new-asnop
+         check-type-match
+         check-if-int-op)
+     state-after-l]))

@@ -1,5 +1,6 @@
 (ns compiler.core
   (:require [compiler.frontend.program :as p]
+            [compiler.frontend.common.error :as err]
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.ast :as ast])
   (:gen-class))
@@ -25,11 +26,17 @@
                             (exit-illegal-arguments))))
         asts (p/build-ast input-file)
         ers (apply concat (map ast/collect-errors asts))
+        parser-errors (filter #(= ::err/parser (::err/phase %)) ers)
+        semantic-errors (filter #(= ::err/semantic-analysis (::err/phase %)) ers)
         pp (clojure.string/join "\n" (mapv ast/pretty-print asts))]
-    (println "ast: " asts)
-    (println "errors: " ers)
-    (println (str pp))) 
-  (.flush *out*)
+    (println "input: \n" (str pp) "\n")
+    (println "parser errors: \n" (clojure.string/join "\n" (map ::err/message parser-errors)) "\n") 
+    (println "semantic errors: \n" (clojure.string/join "\n" (map ::err/message semantic-errors)) "\n")
+    (.flush *out*)
+    (when-not (empty? parser-errors)
+      (exit-parsing))
+    (when-not (empty? semantic-errors)
+      (exit-semantic-analysis)))
   (System/exit 0))
 
 (apply main *command-line-args*)

@@ -5,7 +5,8 @@
             [compiler.frontend.statement :as stmt] 
             [compiler.frontend.expression :as expr]
             [compiler.frontend.variable :as var]
-            ))
+            
+            [compiler.frontend.common.error :as err]))
 
 (defn- token [kind]
   (fn [tok]
@@ -21,7 +22,7 @@
     _ (token ::lex/left-brace)
     stmts (p/many stmt/parse-statement)
     _ (token ::lex/right-brace)]
-   {::code stmts}))
+   stmts))
 
 
 (p/defrule stmt/parse-statement
@@ -34,9 +35,26 @@
 (defmethod ast/pretty-print ::return [ret]
   (str "return " (ast/pretty-print (::ret-expr ret))))
 
+(defmethod ast/semantic-analysis ::return [ret state]
+  (let [[ret-expr state] (ast/semantic-analysis (::ret-expr ret) state)
+        ret (assoc ret ::ret-expr ret-expr)]
+    [(if (not= :int (::expr/type ret-expr))
+       (err/add-error ret (err/make-semantic-error (str "type mismatch between return type int and actual type " (::expr/type ret-expr)) ))
+       ret)
+     state]))
+
 (defn build-ast [source-str]
   (let [tokens (lex/lex source-str)
-        prog (p/run program-parser tokens)]
-    (if (::p/value prog)
-      (::code (::p/value prog))
-      prog)))
+        stmts (p/run program-parser tokens)]
+    (if (::p/success stmts)
+      (let [analysed (loop [state {}
+                            to-do (::p/value stmts)
+                            done []]
+                       (if (empty? to-do)
+                         done
+                         (let [[stmt new-state] (ast/semantic-analysis (first to-do) state)]
+                           (recur new-state
+                                  (rest to-do)
+                                  (conj done stmt)))))]
+        analysed)
+      stmts)))
