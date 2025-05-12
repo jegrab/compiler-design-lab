@@ -43,18 +43,28 @@
        ret)
      state]))
 
+(defmulti is-return ::ast/kind)
+(defmethod is-return ::return [_] true)
+(defmethod is-return :default [_] false)
+
 (defn build-ast [source-str]
   (let [tokens (lex/lex source-str)
         stmts (p/run program-parser tokens)]
     (if (::p/success stmts)
       (let [analysed (loop [state {}
                             to-do (::p/value stmts)
-                            done []]
-                       (if (empty? to-do)
-                         done
+                            done []
+                            has-return false]
+                       (if (empty? to-do) 
+                         {::code done
+                          ::errors (if-not has-return
+                                     #{(err/make-semantic-error "missing return statement")}
+                                     nil)}
                          (let [[stmt new-state] (ast/semantic-analysis (first to-do) state)]
                            (recur new-state
                                   (rest to-do)
-                                  (conj done stmt)))))]
+                                  (conj done stmt)
+                                  (or has-return (is-return stmt))))))]
         analysed)
-      stmts)))
+      {::code nil
+       ::errors #{(err/make-parser-error "unknown fatal parser error")}})))

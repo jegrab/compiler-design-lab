@@ -24,8 +24,12 @@
                           (do
                             (println "input file '" input-file-str "' not found.")
                             (exit-illegal-arguments))))
-        asts (p/build-ast input-file)
-        ers (apply concat (map ast/collect-errors asts))
+        {asts ::p/code 
+         ers ::p/errors} (p/build-ast input-file)
+        _ (when-not asts 
+            (println "unknown fatal parser error")
+            (exit-parsing))
+        ers (clojure.set/union ers (apply concat (map ast/collect-errors asts)))
         parser-errors (filter #(= ::err/parser (::err/phase %)) ers)
         semantic-errors (filter #(= ::err/semantic-analysis (::err/phase %)) ers)
         pp (clojure.string/join "\n" (mapv ast/pretty-print asts))]
