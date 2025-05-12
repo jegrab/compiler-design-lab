@@ -4,11 +4,12 @@
 (s/def ::input seq?)
 (s/def ::remaining ::input)
 (s/def ::expected (s/and coll? ::combinator))
+(s/def ::success boolean?)
 
 (s/def ::success-result (s/keys :req [::value]))
 (s/def ::failure-result (s/keys :req [::expected]))
 (s/def ::result (s/and
-                 (s/keys :req [::remaining])
+                 (s/keys :req [::remaining ::success])
                  (s/or ::success-result ::failure-result)))
 
 (s/def ::parse-fn (s/fspec
@@ -23,7 +24,7 @@
   (map-success [parser mapper] "returns an equivalent parser, but with the successful result value applied to mapper."))
 
 (defn- map-result [mapper result]
-  (if (::value result)
+  (if (::success result)
     (update result ::value mapper)
     result))
 
@@ -38,8 +39,10 @@
   (->SimpleParser (fn [input]
                     (if (predicate (first input))
                       {::remaining (rest input)
+                       ::success true
                        ::value (first input)}
                       {::remaining input
+                       ::success false
                        ::expected expected}))))
 
 (extend-type clojure.lang.IFn
@@ -47,11 +50,42 @@
   (run [this input]
     (if (this (first input))
       {::remaining (rest input)
+       ::success true
        ::value (first input)}
       {::remaining input
+       ::success false
        ::expected [this]}))
   (map-success [this mapper]
     (map-success (predicate-parser this [this]) mapper)))
+
+(defn many
+  "tries to apply parser as many times as possible).
+   zero times is also success.
+   returns the results in a vector.
+   never fails."
+  [parser]
+  (->SimpleParser
+   (fn [input]
+     (loop [input input
+            res []]
+       (let [p-res (run parser input)]
+         (if (::success p-res)
+           (recur (::remaining p-res)
+                  (conj res (::value p-res)))
+           {::remaining (::remaining p-res)
+            ::success true
+            ::value res}))))))
+
+(defn maybe 
+  "tries to apply the parser.
+   if successfull, returns its result.
+   if not, returns success with nil as ::value."
+  [parser]
+  (->SimpleParser 
+   (fn [input]
+     (let [r (run parser input)]
+       (if (::success r) r
+           {::value nil ::success true ::remaining input})))))
 
 (defn parse-seq
   "takes a collection of pairs [key parser] and returns a parser that runs all parsers in order and returns a map with each result mapped to the specified key."
@@ -66,14 +100,16 @@
                            (merge
                             success-options
                             {::remaining input
+                             ::success true
                              ::value val})
                            (let [[key parser] (first parsers)
                                  res (run parser input)]
-                             (if (::value res)
+                             (if (::success res)
                                (recur (rest parsers)
                                       (::remaining res)
                                       (assoc val key (::value res)))
                                {::remaining initial-input
+                                ::success false
                                 ::expected expected})))))))))
 
 (defn- make-seq-input
@@ -122,11 +158,12 @@
   Parser
   (run [this input]
     (let [runs (map (fn [rule] (run rule input)) @parser-rules)
-          successful (filter ::value runs)
+          successful (filter ::success runs)
           num-sucesses (count successful)]
       (cond
         (> num-sucesses 1) (throw (Exception. (str "grammar rules for " name " are nondeterministic.")))
         (< num-sucesses 1) {::remaining input
+                            ::success false
                             ::expected [name]} ;(apply concat (map ::expected runs))}
         (= num-sucesses 1) (first successful))))
   (map-success [this mapper]
@@ -136,7 +173,7 @@
   (update multiparser :parser-rules #(conj % rule)))
 
 (defmacro defmultiparser
-  {:clj-kondo/lint-as 'def}
+  {:clj-kondo/lint-as 'declare}
   [name]
   `(def ~name (->Multiparser (atom []) (quote ~name))))
 
@@ -156,11 +193,12 @@
 
 (defn- try-all-children [parsers input]
   (let [runs (map (fn [parser] (run parser input)) parsers)
-        successful (filter ::value runs)
+        successful (filter ::success runs)
         num-sucesses (count successful)]
     (cond
       (> num-sucesses 1) (throw (Exception. (str "grammar rules" " are nondeterministic.")))
       (< num-sucesses 1) {::remaining input
+                          ::success false
                           ::expected (apply concat (map ::expected runs))}
       (= num-sucesses 1) (first successful))))
 
@@ -179,13 +217,14 @@
         
         leaf-res (try-all-children leaf-parsers initial-input)
         prefix-res (try-all-children prefix-parsers initial-input)]
-    (when (and (::value leaf-res) (::value prefix-res)) (throw (Exception. "grammar rules are nondeterministic")))
-    (loop [lhs (cond (::value leaf-res) leaf-res
+    (when (and (::success leaf-res) (::success prefix-res)) (throw (Exception. "grammar rules are nondeterministic")))
+    (loop [lhs (cond (::success leaf-res) leaf-res
 
-                     (::value prefix-res)
+                     (::success prefix-res)
                      (let [rhs (run-pratt pratt (::remaining prefix-res) (::right-bp prefix-res))]
-                       (if (::value rhs)
+                       (if (::success rhs)
                          {::value ((::result-fn prefix-res) (::value prefix-res) (::value rhs))
+                          ::success true
                           ::remaining (::remaining rhs)} 
                          nil))
 
@@ -194,34 +233,36 @@
       (let [exit-res (try-all-children exit-parsers input)
             postfix-res (try-all-children postfix-parsers input)
             infix-res (try-all-children infix-parsers input)
-            count-successful (count (filter ::value [exit-res postfix-res infix-res]))]
+            count-successful (count (filter ::success [exit-res postfix-res infix-res]))]
         (when (< 1 count-successful) (throw (Exception. "grammar rules are nondeterministic")))
         (cond
-          (not lhs) {::remaining initial-input ::expected [(:name pratt)]}
+          (not lhs) {::remaining initial-input ::expected [(:name pratt) ::success false]}
           (= 0 count-successful) lhs
-          (::value exit-res) lhs
+          (::success exit-res) lhs
 
-          (::value postfix-res)
+          (::success postfix-res)
           (let [l-bp (::left-bp postfix-res)]
             (if (< l-bp min-bp)
               lhs
               (recur
                {::value ((::result-fn postfix-res) (::value postfix-res) (::value lhs))
+                ::success true
                 ::remaining (::remaining postfix-res)}
                (::remaining postfix-res))))
           
-          (::value infix-res)
+          (::success infix-res)
           (let [l-bp (::left-bp infix-res)
                 r-bp (::right-bp infix-res)]
             (if (< l-bp min-bp)
               lhs
               (let [rhs (run-pratt pratt (::remaining infix-res) r-bp)]
-                (if (::value rhs)
+                (if (::success rhs)
                   (recur
                    {::value ((::result-fn infix-res) (::value infix-res) (::value lhs) (::value rhs))
+                    ::success true
                     ::remaining (::remaining rhs)} 
                    (::remaining rhs))
-                  {::remaining initial-input ::expected [(:name pratt)]})))))))))
+                  {::remaining initial-input ::expected [(:name pratt)] ::success false})))))))))
 
 ; child parsers are atom of vector of records that represent a parser .
 ; they also have keys  ::left-bp ::right-bp ::result-fn that are added by the def-op macro

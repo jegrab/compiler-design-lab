@@ -1,5 +1,5 @@
-(ns compiler.frontend.parser.input
-  (:require [compiler.frontend.position :as pos]))
+(ns compiler.frontend.common.input
+  (:require [compiler.frontend.common.position :as pos]))
 
 (defprotocol Input
   "An input to a program that deals with positions in source code"

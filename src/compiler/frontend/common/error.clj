@@ -10,3 +10,9 @@
 (defn add-error [this error]
   (assoc this ::errors (set/union #{error}
                                   (::errors this))))
+
+(defn add-errors [this errors]
+  (if (empty? errors)
+    this
+    (assoc this ::errors (set/union errors
+                                    (::errors this)))))

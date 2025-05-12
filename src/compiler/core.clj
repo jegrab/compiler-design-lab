@@ -1,5 +1,7 @@
 (ns compiler.core
-  (:require [compiler.frontend.parser.lexer :as lex])
+  (:require [compiler.frontend.program :as p]
+            [compiler.frontend.common.lexer :as lex]
+            [compiler.frontend.common.ast :as ast])
   (:gen-class))
 
 (defn- exit-illegal-arguments []
@@ -21,8 +23,12 @@
                           (do
                             (println "input file '" input-file-str "' not found.")
                             (exit-illegal-arguments))))
-        tokens (lex/lex input-file)]
-    (println (str tokens))) 
+        asts (p/build-ast input-file)
+        ers (apply concat (map ast/collect-errors asts))
+        pp (clojure.string/join "\n" (mapv ast/pretty-print asts))]
+    (println "ast: " asts)
+    (println "errors: " ers)
+    (println (str pp))) 
   (.flush *out*)
   (System/exit 0))
 

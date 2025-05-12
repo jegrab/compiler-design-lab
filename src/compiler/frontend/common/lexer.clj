@@ -1,9 +1,9 @@
-(ns compiler.frontend.parser.lexer
+(ns compiler.frontend.common.lexer
   (:require [clojure.edn :as edn]
             [clojure.spec.alpha :as s]
-            [compiler.frontend.error :as err]
-            [compiler.frontend.parser.input :as in]
-            [compiler.frontend.position :as pos]))
+            [compiler.frontend.common.error :as err]
+            [compiler.frontend.common.input :as in]
+            [compiler.frontend.common.position :as pos]))
 
 (s/def ::class keyword?)
 (s/def ::kind keyword?)
@@ -155,15 +155,22 @@
       (catch Exception e (err/add-error token error)))))
 
 
-(def ^:private keywords ["struct" "if" "else" "while" "for" "continue" "break" "return" "assert" "true" "false" "NULL" "print" "read" "alloc" "alloc_array" "int" "bool"
-                         "void" "char" "string"])
+(def ^:private keyword-strings ["struct" "if" "else" "while" "for" "continue" "break" "return" "assert" "true" "false" "NULL" "print" "read" "alloc" "alloc_array" "int" "bool"
+                                "void" "char" "string"])
+
+(def ^:private keywords (loop [res {}
+                               strs keyword-strings]
+                          (if (empty? strs) res
+                              (recur 
+                               (assoc res (first strs) (keyword (str *ns*) (first strs)))
+                               (rest strs)))))
 
 (defmethod postprocess-token ::identifier [token]
   (cond
-    (some #(= % (::source-string token)) keywords)
+    (keywords (::source-string token))
     (assoc token
            ::class ::keyword
-           ::kind (keyword (str *ns*) (::source-string token)))
+           ::kind (keywords (::source-string token)))
 
     (every? (fn [c] (or (<= (int \a) (int c) (int \z))
                         (<= (int \A) (int c) (int \Z))

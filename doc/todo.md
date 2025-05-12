@@ -2,6 +2,10 @@
 
 ## Possible errors:
 - new line convention: CR LF vs Lf
+- parser is very fragile
+- parser does not handle errors.
+- parser does not add position information to the nodes.
+
 
 ## Better Building
 - use maven/gradle/... to download the jar for clojure instead of having it in the repo.
