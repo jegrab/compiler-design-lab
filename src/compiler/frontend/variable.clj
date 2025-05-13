@@ -22,18 +22,24 @@
 (defmethod ast/pretty-print ::identifier [id] :else (str (::name id)))
 
 (defmethod ast/semantic-analysis ::identifier [id state]
-  (let [var-data ((::env state) (::name id))]
+  (let [var-id ((::name-env state) (::name id))
+        var-data ((::env state) var-id)]
     [(cond
-       (not var-data)
-       (err/add-error id (err/make-semantic-error (str "accessing unknown variable " (::name id))))
+       (or (not var-id) (not var-data))
+       (assoc (err/add-error id (err/make-semantic-error (str "accessing unknown variable " (::name id))))
+              ::expr/type :unknown
+              ::id nil)
 
-       (not (::initialized var-data))
-       (err/add-error id (err/make-semantic-error (str "accessing variable " (::name id) " before initializing it.")))
+       (and (not (::initialized var-data))
+            (not (::in-assignment state)))
+       (assoc (err/add-error id (err/make-semantic-error (str "accessing variable " (::name id) " before initializing it.")))
+              ::expr/type (::type var-data)
+              ::id var-id)
 
        :else
        (assoc id
               ::expr/type (::type var-data)
-              ::id (::id var-data)))
+              ::id var-id))
      state]))
 
 (p/defrule stmt/parse-statement
@@ -53,16 +59,17 @@
   (str "int " (::name decl) (if (::value decl) (str " = " (ast/pretty-print (::value decl))) "") ";"))
 
 (defmethod ast/semantic-analysis ::declare [decl state]
-  (let [[new-val state-afte-val] (if (::value decl)
+  (let [[new-val state-after-val] (if (::value decl)
                                    (ast/semantic-analysis (::value decl) state)
                                    [nil state])
         initialized (if (::value decl) true false)
-        new-state (update state-afte-val
-                          ::env (fn [old-env] (assoc old-env
-                                                     (::name decl)
-                                                     {::type (::type decl)
-                                                      ::id (java.util.UUID/randomUUID)
-                                                      ::initialized initialized})))
+        id (java.util.UUID/randomUUID)
+        new-state (assoc state-after-val
+                          ::name-env (assoc (::name-env state-after-val) (::name decl) id)
+                          ::env (assoc (::env state-after-val)
+                                       id {::type (::type decl)
+                                           ::name (::name decl)
+                                           ::initialized initialized}))
         new-decl (assoc decl ::value new-val)]
     [(if (and new-val (not= (::type decl) (::expr/type new-val)))
        (err/add-error new-decl (err/make-semantic-error (str "type mismatch. Declared " (::type decl) " but given " (::expr/type new-val))))
@@ -113,7 +120,8 @@
   (if (= (::expr/type (::l-value asnop))
          (::expr/type (::expr asnop)))
     asnop
-    (err/add-error asnop (err/make-semantic-error (str "type mismatch: assigning " (::expr/type (::expr asnop)) " to " (::expr/type (::l-value asnop))) ))))
+    (err/add-error asnop (err/make-semantic-error (str "type mismatch: assigning '" (::exptype (::expr asnop)) " to " (::expr/type (::l-value asnop)) 
+                                                       "\n" (::expr asnop))))))
 
 (defn- check-if-int-op [asnop]
   (if (and (#{::plus-assign ::minus-assign ::mul-assign ::div-assign ::mod-assign} (::asnop asnop))
@@ -123,11 +131,14 @@
 
 (defmethod ast/semantic-analysis ::asnop [asnop state]
   (let [[new-e state-after-e] (ast/semantic-analysis (::expr asnop) state)
-        [new-l state-after-l] (ast/semantic-analysis (::l-value asnop) state-after-e)
+        [new-l state-after-l] (ast/semantic-analysis (::l-value asnop) (assoc state-after-e ::in-assignment true))
+        id (::name-env state)
+        state-with-initialzed (assoc-in (assoc state-after-l ::in-assignment false) [::env id ::initialized] true)
         new-asnop (assoc asnop
                          ::l-value new-l
                          ::expr new-e)]
     [(-> new-asnop
          check-type-match
          check-if-int-op)
-     state-after-l]))
+     state-with-initialzed]))
+
