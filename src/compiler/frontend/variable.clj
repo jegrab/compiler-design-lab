@@ -120,8 +120,7 @@
   (if (= (::expr/type (::l-value asnop))
          (::expr/type (::expr asnop)))
     asnop
-    (err/add-error asnop (err/make-semantic-error (str "type mismatch: assigning '" (::exptype (::expr asnop)) " to " (::expr/type (::l-value asnop)) 
-                                                       "\n" (::expr asnop))))))
+    (err/add-error asnop (err/make-semantic-error (str "type mismatch: assigning '" (::exptype (::expr asnop)) " to " (::expr/type (::l-value asnop)))))))
 
 (defn- check-if-int-op [asnop]
   (if (and (#{::plus-assign ::minus-assign ::mul-assign ::div-assign ::mod-assign} (::asnop asnop))
