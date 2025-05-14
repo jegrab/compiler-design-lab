@@ -10,3 +10,5 @@
 (defn- token [kind]
   (fn [tok]
     (= (::lex/kind tok) kind)))
+
+(defmulti to-ir (fn [stmt] (::ast/kind stmt)))

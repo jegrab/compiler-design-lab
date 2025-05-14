@@ -5,7 +5,9 @@
             [compiler.frontend.expression :as expr]
             [compiler.frontend.statement :as stmt]
             [compiler.frontend.common.error :as err]
-            [compiler.frontend.common.namespace :as name])) 0
+            [compiler.frontend.common.namespace :as name]
+            [compiler.frontend.common.id :as id]
+            [compiler.middleend.ir :as ir]))
 
 (defn- token [kind]
   (fn [tok]
@@ -26,7 +28,7 @@
 
 (defmethod ast/pretty-print ::identifier [id] :else (str (::name id)))
 
-(defmethod name/resolve-names-expr ::identifier [ident env]
+(defmethod name/resolve-names-expr ::identifier [ident env] 
   (cond
     (not ((::names env) (::name ident)))
     (err/add-error ident (err/make-semantic-error (str "accessing unknown variable " (::name ident))))
@@ -37,6 +39,10 @@
 
     :else
     (assoc ident ::id ((::names env) (::name ident)))))
+
+(defmethod expr/to-ir ::identifier [id into]
+  (println "into " into " id " id)
+  [[::ir/assign into (::id id)]])
 
 (p/defrule stmt/parse-statement
   [type (token ::lex/int)
@@ -54,7 +60,7 @@
   (str "int " (::name decl) (if (::value decl) (str " = " (ast/pretty-print (::value decl))) "") ";"))
 
 (defmethod name/resolve-names-stmt ::declare [decl env]
-  (let [id (java.util.UUID/randomUUID)
+  (let [id (id/make-var)
         name (::name decl)]
     [(assoc decl
             ::id id
@@ -63,6 +69,11 @@
                       nil))
      (assoc-in (assoc-in env [::names name] id)
                [::initialized id] (if (::value decl) true nil))]))
+
+(defmethod stmt/to-ir ::declare [decl]
+  (if (::value decl)
+    (expr/to-ir (::value decl) (::id decl))
+    []))
 
 (p/defmultiparser asnop-parser)
 (p/defrule asnop-parser [_ (token ::lex/assign)] ::assign)
@@ -113,3 +124,6 @@
             ::l-value l-v
             ::expr expr)
      (assoc-in env [::initialized lv-id] true)]))
+
+(defmethod stmt/to-ir ::asnop [asnop]
+  (expr/to-ir (::expr asnop) (::id (::l-value asnop))))

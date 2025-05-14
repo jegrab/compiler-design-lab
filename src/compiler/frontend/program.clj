@@ -42,6 +42,9 @@
           ::ret-expr (name/resolve-names-expr (::ret-expr ret) env)) 
    env])
 
+(defmethod stmt/to-ir ::return [ret]
+  (expr/to-ir (::ret-expr ret) ::ret-reg))
+
 (defmulti is-return ::ast/kind)
 (defmethod is-return ::return [_] true)
 (defmethod is-return :default [_] false)
@@ -67,3 +70,12 @@
         analysed)
       {::code nil
        ::errors #{(err/make-parser-error "unknown fatal parser error")}})))
+
+(defn to-ir [ast-seq]
+  (loop [asts ast-seq
+         res []]
+    (if (empty? asts)
+      res
+      (recur 
+       (rest asts)
+       (into [] (concat res (stmt/to-ir (first asts))))))))

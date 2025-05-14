@@ -7,11 +7,15 @@
    [compiler.frontend.common.lexer :as lex]
    [compiler.frontend.common.parser :as p]
    [compiler.frontend.common.error :as err]
+   [compiler.frontend.common.id :as id]
+   [compiler.middleend.ir :as ir]
    [compiler.frontend.common.namespace :as name]))
 
 (s/def ::kind keyword?)
 (s/def ::parse-expr (s/keys :req [::ast/kind]
                             :opt [::type]))
+
+(defmulti to-ir (fn [expr into] (::ast/kind expr)))
 
 (p/def-op-parser parse-expr)
 
@@ -44,6 +48,9 @@
   (assoc state
          ::res (::value c)))
 
+(defmethod to-ir ::numerical-constant [c into]
+  [[::ir/assign into (::value c)]])
+
 (p/def-op parse-expr parantheses
   [_ (token ::lex/left-parentheses)
    e parse-expr
@@ -74,6 +81,12 @@
   (assoc state
          ::res (- (::res (ast/execute c state)))))
 
+(defmethod to-ir ::negate [n into]
+  (let [tmp (id/make-tmp)
+        prev (to-ir (::child n) tmp)]
+    (conj prev
+          [::ir/assign into tmp])))
+
 (p/def-op parse-expr plus
   {:precedence 2 :associates :left}
   [left parse-expr
@@ -93,6 +106,16 @@
 (defmethod ast/pretty-print ::plus [n] (pretty-print-binop n "+"))
 (defmethod ast/execute ::plus [n s] (exect-bin-op n s +))
 
+(defn- to-ir-bin-op [n res op]
+  (let [l (id/make-tmp)
+        r (id/make-tmp)
+        l-prev (to-ir (::left n) l)
+        r-prev (to-ir (::right n) r)]
+    (conj (into [] (concat l-prev r-prev))
+          [::ir/assign res [op l r]])))
+
+(defmethod to-ir ::plus [n res] (to-ir-bin-op n res ::ir/plus))
+
 (p/def-op parse-expr minus
   {:precedence 2 :associates :left}
   [left parse-expr
@@ -102,6 +125,7 @@
 
 (defmethod ast/pretty-print ::minus [n] (pretty-print-binop n "-"))
 (defmethod ast/execute ::minus [n s] (exect-bin-op n s -))
+(defmethod to-ir ::minus [n res] (to-ir-bin-op n res ::ir/minus))
 
 (p/def-op parse-expr mul
   {:precedence 3 :associates :left}
@@ -112,6 +136,7 @@
 
 (defmethod ast/pretty-print ::mul [n] (pretty-print-binop n "*"))
 (defmethod ast/execute ::mul [n s] (exect-bin-op n s *))
+(defmethod to-ir ::mul [n res] (to-ir-bin-op n res ::ir/mul))
 
 (p/def-op parse-expr div
   {:precedence 3 :associates :left}
@@ -122,6 +147,7 @@
 
 (defmethod ast/pretty-print ::div [n] (pretty-print-binop n "/"))
 (defmethod ast/execute ::div [n s] (exect-bin-op n s /))
+(defmethod to-ir ::div [n res] (to-ir-bin-op n res ::ir/div))
 
 (p/def-op parse-expr mod
   {:precedence 3 :associates :left}
@@ -132,3 +158,4 @@
 
 (defmethod ast/pretty-print ::mod [n] (pretty-print-binop n "%"))
 (defmethod ast/execute ::mod [n s] (exect-bin-op n s mod))
+(defmethod to-ir ::mod [n res] (to-ir-bin-op n res ::ir/mod))

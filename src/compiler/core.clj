@@ -2,7 +2,8 @@
   (:require [compiler.frontend.program :as p]
             [compiler.frontend.common.error :as err]
             [compiler.frontend.common.lexer :as lex]
-            [compiler.frontend.common.ast :as ast])
+            [compiler.frontend.common.ast :as ast]
+            [compiler.frontend.statement :as stmt])
   (:gen-class))
 
 (defn- exit-illegal-arguments []
@@ -24,23 +25,26 @@
                           (do
                             (println "input file '" input-file-str "' not found.")
                             (exit-illegal-arguments))))
-        {asts ::p/code 
+        {asts ::p/code
          ers ::p/errors} (p/build-ast input-file)
-        _ (when-not asts 
+        _ (when-not asts
             (println "unknown fatal parser error")
             (exit-parsing))
         ers (clojure.set/union ers (apply concat (map ast/collect-errors asts)))
         parser-errors (filter #(= ::err/parser (::err/phase %)) ers)
         semantic-errors (filter #(= ::err/semantic-analysis (::err/phase %)) ers)
-        pp (clojure.string/join "\n" (mapv ast/pretty-print asts))]
+        pp (clojure.string/join "\n" (mapv ast/pretty-print asts))
+        _ (println asts)
+        ir (when asts (p/to-ir asts))]
     (println "input: \n" (str pp) "\n")
-    (println "parser errors: \n" (clojure.string/join "\n" (map ::err/message parser-errors)) "\n") 
+    (println "parser errors: \n" (clojure.string/join "\n" (map ::err/message parser-errors)) "\n")
     (println "semantic errors: \n" (clojure.string/join "\n" (map ::err/message semantic-errors)) "\n")
     (.flush *out*)
     (when-not (empty? parser-errors)
       (exit-parsing))
     (when-not (empty? semantic-errors)
-      (exit-semantic-analysis)))
+      (exit-semantic-analysis))
+    (println ir))
   (System/exit 0))
 
 (main "./test-programs/test.c0")
