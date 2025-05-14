@@ -6,5 +6,5 @@
 
 
 
-; rval is constant or var
+; rval is constant or var or [op params...]
 ; [::assign var r-val]

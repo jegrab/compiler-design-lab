@@ -6,10 +6,11 @@
    [compiler.frontend.common.ast :as ast]
    [compiler.frontend.common.lexer :as lex]
    [compiler.frontend.common.parser :as p]
-   [compiler.frontend.common.error :as err]))
+   [compiler.frontend.common.error :as err]
+   [compiler.frontend.common.namespace :as name]))
 
 (s/def ::kind keyword?)
-(s/def ::parse-expr (s/keys :req [::kind]
+(s/def ::parse-expr (s/keys :req [::ast/kind]
                             :opt [::type]))
 
 (p/def-op-parser parse-expr)
@@ -21,7 +22,7 @@
 (p/def-op parse-expr numerical-constant
   [i (token ::lex/numerical-constant)]
   {::ast/kind ::numerical-constant
-   ::ast/children [::value]
+   ::ast/children []
    ::num-kind (case (::lex/num-kind i)
                 ::lex/hex ::hex
                 ::lex/dec ::dec)
@@ -29,17 +30,15 @@
 
 (defmethod ast/pretty-print ::numerical-constant [c] (str (::value c)))
 
-(defmethod ast/semantic-analysis ::numerical-constant [c state]
-  (let [c (assoc c ::type :int)
-        c (if (and (= ::dec (::num-kind c))
-                   (not (<= 0 (::value c) 2147483648)))
-            (err/add-error c (err/make-semantic-error (str "the dec number " (::value c) " does not fit into the range of int.")))
-            c)
-        c (if (and (= ::hex (::num-kind c))
-                   (not (<= 0 (::value c) 0xffffffff)))
-            (err/add-error c (err/make-semantic-error (str "the hex number " (::value c) " does not fit into the range of int.")))
-            c)]
-    [c state]))
+(defmethod ast/check-after-parse ::numerical-constant [c]
+  (cond
+    (and (= ::dec (::num-kind c)) (not (<= 0 (::value c) 2147483648)))
+    (err/add-error c (err/make-semantic-error (str "the dec number " (::value c) " does not fit into the range of int.")))
+    
+    (and (= ::hex (::num-kind c)) (not (<= 0 (::value c) 0xffffffff)))
+    (err/add-error c (err/make-semantic-error (str "the hex number " (::value c) " does not fit into the range of int.")))
+    
+    :else c))
 
 (defmethod ast/execute ::numerical-constant [c state]
   (assoc state
@@ -75,13 +74,6 @@
   (assoc state
          ::res (- (::res (ast/execute c state)))))
 
-(defmethod ast/semantic-analysis ::negate [n state]
-  (let [[new-c n-s] (ast/semantic-analysis (::child n) state)
-        new-neg (assoc n ::type :int ::child new-c)]
-    (if (= (::type new-c) :int)
-      new-neg
-      (err/add-error new-neg (err/make-semantic-error (str "negate only works with int. but was given type " (::type new-c)))))))
-
 (p/def-op parse-expr plus
   {:precedence 2 :associates :left}
   [left parse-expr
@@ -92,19 +84,6 @@
 (defn- pretty-print-binop [node op-str]
   (str "(" (ast/pretty-print (::left node)) op-str (ast/pretty-print(::right node)) ")"))
 
-(defn- analyse-int-binop [node state op-name]
-  (let [[new-left state] (ast/semantic-analysis (::left node) state)
-        [new-right state] (ast/semantic-analysis (::right node) state)
-        new-node (assoc node
-                        ::type :int
-                        ::left new-left
-                        ::right new-right)]
-    [(if (or (not= :int (::type new-left))
-             (not= :int (::type new-right)))
-       (err/add-error new-node (err/make-semantic-error (str "operator " op-name " expects two integers but got " (::type new-left) " and " (::type new-right))))
-       new-node)
-     state]))
-
 (defn- exect-bin-op [node state fn]
   (let [sl (ast/execute (::left node) state)
         sr (ast/execute (::right node) sl)]
@@ -112,7 +91,6 @@
            ::res (fn (::res sl) (::res sr)))))
 
 (defmethod ast/pretty-print ::plus [n] (pretty-print-binop n "+"))
-(defmethod ast/semantic-analysis ::plus [n s] (analyse-int-binop n s "+"))
 (defmethod ast/execute ::plus [n s] (exect-bin-op n s +))
 
 (p/def-op parse-expr minus
@@ -123,7 +101,6 @@
   (bin-op-node ::minus left right))
 
 (defmethod ast/pretty-print ::minus [n] (pretty-print-binop n "-"))
-(defmethod ast/semantic-analysis ::minus [n s] (analyse-int-binop n s "-"))
 (defmethod ast/execute ::minus [n s] (exect-bin-op n s -))
 
 (p/def-op parse-expr mul
@@ -134,7 +111,6 @@
   (bin-op-node ::mul left right))
 
 (defmethod ast/pretty-print ::mul [n] (pretty-print-binop n "*"))
-(defmethod ast/semantic-analysis ::mul [n s] (analyse-int-binop n s "*"))
 (defmethod ast/execute ::mul [n s] (exect-bin-op n s *))
 
 (p/def-op parse-expr div
@@ -145,7 +121,6 @@
   (bin-op-node ::div left right))
 
 (defmethod ast/pretty-print ::div [n] (pretty-print-binop n "/"))
-(defmethod ast/semantic-analysis ::div [n s] (analyse-int-binop n s "/"))
 (defmethod ast/execute ::div [n s] (exect-bin-op n s /))
 
 (p/def-op parse-expr mod
@@ -156,5 +131,4 @@
   (bin-op-node ::mod left right))
 
 (defmethod ast/pretty-print ::mod [n] (pretty-print-binop n "%"))
-(defmethod ast/semantic-analysis ::mod [n s] (analyse-int-binop n s "%"))
 (defmethod ast/execute ::mod [n s] (exect-bin-op n s mod))

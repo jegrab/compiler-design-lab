@@ -43,4 +43,6 @@
       (exit-semantic-analysis)))
   (System/exit 0))
 
+(main "./test-programs/test.c0")
+
 (apply main *command-line-args*)

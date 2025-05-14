@@ -5,6 +5,7 @@
             [compiler.frontend.statement :as stmt] 
             [compiler.frontend.expression :as expr]
             [compiler.frontend.variable :as var]
+            [compiler.frontend.common.namespace :as name]
             
             [compiler.frontend.common.error :as err]))
 
@@ -30,18 +31,16 @@
    ret-expr expr/parse-expr
    _ (token ::lex/semicolon)]
   {::ast/kind ::return
+   ::ast/children [::ret-expr]
    ::ret-expr ret-expr})
 
 (defmethod ast/pretty-print ::return [ret]
   (str "return " (ast/pretty-print (::ret-expr ret))))
 
-(defmethod ast/semantic-analysis ::return [ret state]
-  (let [[ret-expr state] (ast/semantic-analysis (::ret-expr ret) state)
-        ret (assoc ret ::ret-expr ret-expr)]
-    [(if (not= :int (::expr/type ret-expr))
-       (err/add-error ret (err/make-semantic-error (str "type mismatch between return type int and actual type " (::expr/type ret-expr)) ))
-       ret)
-     state]))
+(defmethod name/resolve-names-stmt ::return [ret env]
+  [(assoc ret
+          ::ret-expr (name/resolve-names-expr (::ret-expr ret) env)) 
+   env])
 
 (defmulti is-return ::ast/kind)
 (defmethod is-return ::return [_] true)
@@ -51,7 +50,7 @@
   (let [tokens (lex/lex source-str)
         stmts (p/run program-parser tokens)]
     (if (::p/success stmts)
-      (let [analysed (loop [state {}
+      (let [analysed (loop [env var/default-env
                             to-do (::p/value stmts)
                             done []
                             has-return false]
@@ -60,8 +59,8 @@
                           ::errors (if-not has-return
                                      #{(err/make-semantic-error "missing return statement")}
                                      nil)}
-                         (let [[stmt new-state] (ast/semantic-analysis (first to-do) state)]
-                           (recur new-state
+                         (let [[stmt new-env] (name/resolve-names-stmt (ast/check-after-parse (first to-do)) env)] 
+                           (recur new-env
                                   (rest to-do)
                                   (conj done stmt)
                                   (or has-return (is-return stmt))))))]

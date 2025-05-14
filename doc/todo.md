@@ -5,6 +5,7 @@
 - parser is very fragile
 - parser does not handle errors.
 - parser does not add position information to the nodes.
+- variables are not marked as initialized when they are assigned by asnop.
 
 
 ## Better Building
