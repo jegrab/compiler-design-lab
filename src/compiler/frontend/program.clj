@@ -6,6 +6,7 @@
             [compiler.frontend.expression :as expr]
             [compiler.frontend.variable :as var]
             [compiler.frontend.common.namespace :as name]
+            [compiler.middleend.ir :as ir]
             
             [compiler.frontend.common.error :as err]))
 
@@ -43,7 +44,7 @@
    env])
 
 (defmethod stmt/to-ir ::return [ret]
-  (expr/to-ir (::ret-expr ret) ::ret-reg))
+  (expr/to-ir (::ret-expr ret) ::ir/ret-register))
 
 (defmulti is-return ::ast/kind)
 (defmethod is-return ::return [_] true)

@@ -9,7 +9,7 @@ CLASSPATH="$CLJ_JAR:$SPEC_ALPHA_JAR:$CORE_SPECS_ALPHA_JAR:$SRC_DIR"
 inputFile="$1"
 outputFile="${!#}"
 
-
-java -cp "$CLASSPATH" clojure.main $SRC_DIR/compiler/core.clj $inputFile $outputFile
+java -cp "$CLASSPATH" clojure.main "$SRC_DIR/compiler/core.clj" "$inputFile" "$outputFile.s"
+gcc "$outputFile.s" -o "$outputFile"
 
 

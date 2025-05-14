@@ -41,7 +41,6 @@
     (assoc ident ::id ((::names env) (::name ident)))))
 
 (defmethod expr/to-ir ::identifier [id into]
-  (println "into " into " id " id)
   [[::ir/assign into (::id id)]])
 
 (p/defrule stmt/parse-statement
