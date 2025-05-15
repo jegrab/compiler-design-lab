@@ -55,6 +55,7 @@
 (defn build-ast [source-str]
   (let [tokens (lex/lex source-str)
         stmts (p/run program-parser tokens)]
+    (println "tokens:" (map ::lex/kind tokens) "\n\n")
     (if (::p/success stmts)
       (let [analysed (loop [env var/default-env
                             to-do (::p/value stmts)

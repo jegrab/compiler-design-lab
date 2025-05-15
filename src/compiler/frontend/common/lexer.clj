@@ -54,7 +54,7 @@
         [{::class token-class
           ::source-string (apply str prefix)
           ::pos/span (pos/span-from-to (in/current-position input)
-                                   (in/current-position cur-in))}
+                                       (in/current-position cur-in))}
          cur-in]))))
 
 (defn- no-state-pred
@@ -95,6 +95,50 @@
              :hex
              nil))))
 
+(defn- skip-comment [input] 
+  (let [input (skip-spaces input)]
+    (cond
+      (and (= \/ (in/current input))
+           (= \/ (in/following input)))
+      (loop [input input]
+        (if (or (= \newline (in/current input))
+                (not (in/current input)))
+          (in/move input)
+          (recur (in/move input))))
+    
+      (and (= \/ (in/current input))
+           (= \* (in/following input)))
+      (loop [input (in/move input 2)
+             depth 1]
+        (cond
+          (= 0 depth) input
+    
+          (and (= \/ (in/current input))
+               (= \* (in/following input)))
+          (recur (in/move input 2)
+                 (inc depth))
+    
+          (and (= \* (in/current input))
+               (= \/ (in/following input)))
+          (recur (in/move input 2)
+                 (dec depth))
+    
+          (= nil (in/current input))
+          nil
+    
+          :else
+          (recur (in/move input)
+                 depth)))
+      :else
+      input))
+  )
+
+(defn- skip-comments [input]
+  (let [in2 (skip-comment input)]
+    (if (= in2 input)
+      input
+      (recur in2))))
+
 (defn- lex-one-token [input]
   (condp #(%1 %2) (in/current input)
     nil? nil
@@ -111,12 +155,15 @@
     (make-one-char-token input ::error)))
 
 (defn- lex-string [string]
-  (loop [input (in/make-string-input string)
+  (loop [input-before-comment (in/make-string-input string)
          tokens []]
-    (let [[next rest] (lex-one-token (skip-spaces input))]
-      (if next
-        (recur rest (conj tokens next))
-        tokens))))
+    (let [input (skip-spaces (skip-comments (skip-spaces input-before-comment)))]
+      (if-not input
+        (conj tokens (first (make-multi-char-token input-before-comment ::error (no-state-pred #(not= % nil)))))
+        (let [[next rest] (lex-one-token (skip-spaces input))]
+          (if next
+            (recur rest (conj tokens next))
+            tokens))))))
 
 (defmulti postprocess-token ::class)
 
@@ -164,7 +211,7 @@
 (def ^:private keywords (loop [res {}
                                strs keyword-strings]
                           (if (empty? strs) res
-                              (recur 
+                              (recur
                                (assoc res (first strs) (keyword (str *ns*) (first strs)))
                                (rest strs)))))
 
@@ -201,5 +248,5 @@
 (s/fdef lex
   :args (s/cat :string ::source-string)
   :ret (s/coll-of ::token)
-  :fn #(= (apply str (filter (fn [c ] (not (space-char c))) (-> % :args :string)))
+  :fn #(= (apply str (filter (fn [c] (not (space-char c))) (-> % :args :string)))
           (apply str (map ::source-string (:ret %)))))

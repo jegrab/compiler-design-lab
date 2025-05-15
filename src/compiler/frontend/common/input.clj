@@ -23,7 +23,8 @@
   (move [this n]
     (cond
       (< n 0) (throw (IllegalArgumentException. (str "Input can only move forward. " n " is not a valid step count.")))
-      (= n 0 this)
+      (= n 0) this
+      :else 
       (move (move this) (dec n)))))
 
 (defn make-string-input [string]
