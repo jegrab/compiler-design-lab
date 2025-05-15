@@ -34,6 +34,15 @@
   (map-success [this mapper]
     (update this :parse-fn (fn [p-fn] (comp #(map-result mapper %) p-fn)))))
 
+(defn end-of-file []
+  (->SimpleParser (fn [input]
+                    (if (empty? input)
+                      {::remaining input
+                       ::success true
+                       ::value nil}
+                      {::remaining input
+                       ::success false
+                       ::expected ["end of file"]}))))
 
 (defn- predicate-parser [predicate expected]
   (->SimpleParser (fn [input]

@@ -23,7 +23,8 @@
     _ (token ::lex/right-parentheses)
     _ (token ::lex/left-brace)
     stmts (p/many stmt/parse-statement)
-    _ (token ::lex/right-brace)]
+    _ (token ::lex/right-brace)
+    _ (p/end-of-file)]
    stmts))
 
 

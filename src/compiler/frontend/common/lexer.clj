@@ -124,7 +124,7 @@
                  (dec depth))
     
           (= nil (in/current input))
-          nil
+          input
     
           :else
           (recur (in/move input)

@@ -13,7 +13,7 @@
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
-(def default-env {::env {} ::initialized {}})
+(def default-env {::names {} ::initialized {} ::declared {}})
 
 (def ^:dynamic in-l-value false)
 
@@ -60,14 +60,19 @@
 
 (defmethod name/resolve-names-stmt ::declare [decl env]
   (let [id (id/make-var)
-        name (::name decl)]
-    [(assoc decl
-            ::id id
-            ::value (if (::value decl)
-                      (name/resolve-names-expr (::value decl) env)
-                      nil))
-     (assoc-in (assoc-in env [::names name] id)
-               [::initialized id] (if (::value decl) true nil))]))
+        name (::name decl)
+        new-decl (assoc decl
+                        ::id id
+                        ::value (if (::value decl)
+                                  (name/resolve-names-expr (::value decl) env)
+                                  nil))]
+    [(if ((::declared env) name)
+       (err/add-error new-decl (err/make-semantic-error (str "variable " name " is already declared.")))
+       new-decl)
+     (assoc-in
+      (assoc-in (assoc-in env [::names name] id)
+                [::initialized id] (if (::value decl) true nil))
+      [::declared name] true)]))
 
 (defmethod stmt/to-ir ::declare [decl]
   (if (::value decl)
