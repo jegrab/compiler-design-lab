@@ -115,8 +115,8 @@
 
 (defmethod name/resolve-names-stmt ::asnop [asnop env]
   (let [l-v (binding
-             [in-l-value true]
-             (name/resolve-names-expr (::l-value asnop) env))
+             [in-l-value (if (= ::assign (::asnop asnop)) true false)]
+              (name/resolve-names-expr (::l-value asnop) env))
         lv-id (::id l-v)
         expr (name/resolve-names-expr (::expr asnop) env)]
     [(assoc asnop
@@ -124,5 +124,18 @@
             ::expr expr)
      (assoc-in env [::initialized lv-id] true)]))
 
+
+(defn- calc-assign [op asnop]
+  (let [tmp (id/make-tmp)]
+    (conj (expr/to-ir (::expr asnop) tmp)
+          [::ir/assign (::id (::l-value asnop)) [op (::id (::l-value asnop)) tmp]])))
+
 (defmethod stmt/to-ir ::asnop [asnop]
-  (expr/to-ir (::expr asnop) (::id (::l-value asnop))))
+  (let [tmp (id/make-tmp)]
+    (case (::asnop asnop)
+      ::assign (expr/to-ir (::expr asnop) (::id (::l-value asnop)))
+      ::plus-assign (calc-assign ::ir/plus asnop)
+      ::minus-assign (calc-assign ::ir/minus asnop) 
+      ::mul-assign (calc-assign ::ir/mul asnop) 
+      ::div-assign (calc-assign ::ir/div asnop)
+      ::mod-assign (calc-assign ::ir/mod asnop))))
