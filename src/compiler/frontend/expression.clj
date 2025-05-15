@@ -55,7 +55,7 @@
   [_ (token ::lex/left-parentheses)
    e parse-expr
    _ (token ::lex/right-parentheses)]
-  parse-expr)
+  e)
 
 (defn- bin-op-node [op left right]
   {::ast/kind op
@@ -85,7 +85,7 @@
   (let [tmp (id/make-tmp)
         prev (to-ir (::child n) tmp)]
     (conj prev
-          [::ir/assign into tmp])))
+          [::ir/assign into [::ir/negate tmp]])))
 
 (p/def-op parse-expr plus
   {:precedence 2 :associates :left}
@@ -95,7 +95,8 @@
   (bin-op-node ::plus left right))
 
 (defn- pretty-print-binop [node op-str]
-  (str "(" (ast/pretty-print (::left node)) op-str (ast/pretty-print(::right node)) ")"))
+  ;#break
+  (str "(" (ast/pretty-print (::left node)) op-str (ast/pretty-print (::right node)) ")"))
 
 (defn- exect-bin-op [node state fn]
   (let [sl (ast/execute (::left node) state)

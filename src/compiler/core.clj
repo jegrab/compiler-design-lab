@@ -8,15 +8,22 @@
   (:gen-class))
 
 (defn- exit-illegal-arguments []
+  (throw (ex-info "illegal arguments error" {:exitcode 1 :cause "illegal arguments"}))
+  (println "exit with illegal argument error")
   (.flush *out*)
   (System/exit 1))
 
 (defn- exit-parsing []
+  (throw (ex-info "parser error" {:exitcode 42 :cause "parser error"}))
+  (println "exit with parser error")
   (.flush *out*)
   (System/exit 42))
 
-(defn- exit-semantic-analysis [] (.flush *out*) (System/exit 7))
-
+(defn- throw-semantic-analysis []
+  (throw (ex-info "semantic analysis error" {:exitcode 7 :cause "semantic error"}))
+  (println "exit with semantic analysis error")
+  (.flush *out*)
+  (System/exit 7))
 
 (defn- main [& args]
   (when (not= 2 (count args))
@@ -48,13 +55,17 @@
     (when-not (empty? parser-errors)
       (exit-parsing))
     (when-not (empty? semantic-errors)
-      (exit-semantic-analysis))
+      (throw-semantic-analysis))
     (println ir)
     (println asm)
-    (spit output-file-str asm)
-    )
+    (spit output-file-str asm))
   (System/exit 0))
 
 (println "cmd args:" *command-line-args*)
 
-(apply main *command-line-args*)
+(try
+  (apply main *command-line-args*)
+  (catch clojure.lang.ExceptionInfo e 
+    (println "error: " (-> e ex-data :cause))
+    (println "exiting with " (-> e ex-data :exitcode))
+    (System/exit (-> e ex-data :exitcode))))

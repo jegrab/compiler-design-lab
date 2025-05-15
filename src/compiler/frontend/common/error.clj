@@ -17,6 +17,7 @@
     (assoc this ::errors (set/union errors
                                     (::errors this)))))
 
+(defn has-error? [thing] (not (empty? (::errors thing))))
 
 (defn make-parser-error [message] 
   {::phase ::parser

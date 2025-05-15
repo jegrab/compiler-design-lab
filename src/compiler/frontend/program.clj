@@ -56,22 +56,30 @@
   (let [tokens (lex/lex source-str)
         stmts (p/run program-parser tokens)]
     (println "tokens:" (map ::lex/kind tokens) "\n\n")
-    (if (::p/success stmts)
+
+    (cond
+      (some err/has-error? tokens)
+      {::code nil
+       ::errors #{(err/make-parser-error "illegal token detected")}}
+
+      (::p/success stmts)
       (let [analysed (loop [env var/default-env
                             to-do (::p/value stmts)
                             done []
                             has-return false]
-                       (if (empty? to-do) 
+                       (if (empty? to-do)
                          {::code done
                           ::errors (if-not has-return
                                      #{(err/make-semantic-error "missing return statement")}
                                      nil)}
-                         (let [[stmt new-env] (name/resolve-names-stmt (ast/check-after-parse (first to-do)) env)] 
+                         (let [[stmt new-env] (name/resolve-names-stmt (ast/check-after-parse (first to-do)) env)]
                            (recur new-env
                                   (rest to-do)
                                   (conj done stmt)
                                   (or has-return (is-return stmt))))))]
         analysed)
+      
+      :else
       {::code nil
        ::errors #{(err/make-parser-error "unknown fatal parser error")}})))
 
