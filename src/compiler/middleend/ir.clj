@@ -25,6 +25,7 @@
 
 (defmulti get-res-var-name first)
 (defmethod get-res-var-name ::assign [[assign dest input]] dest)
+(defmethod get-res-var-name ::return [ret] nil)
 
 (defn enumerate-vars [ir-vec]
   (let [var-set (into #{} (map get-res-var-name ir-vec))
@@ -34,7 +35,15 @@
 (defmulti codegen (fn [instr var-ids] (first instr)))
 
 (defn read-stack [offset]
+  (println "read off " offset)
   (str " -" offset "(%rsp)"))
+
+(defmethod codegen ::return [ret var-ids]
+  [(str "movl " (read-stack (* 4 (var-ids ::ret-register)))  ", %eax")
+   "movslq %eax, %rdi"
+   "leave"
+   "ret"
+   ""])
 
 (defmethod codegen ::assign [[assign dest input] var-ids]
 
@@ -83,13 +92,13 @@
          (str "idivl %ebx")
          (str "movl %edx, " (read-stack dest-offset))]))))
 
-(defn make-code [instrs]
+(defn make-code [instrs] 
   (let [num-vars (enumerate-vars instrs)
         asm-lines (apply concat (map #(codegen % num-vars) instrs))
         before start
-        after [(str "movl " (read-stack (num-vars ::ret-register))  ", %eax") 
-               "leave" 
-               "ret"
-               ""]
-        whole (concat before asm-lines after)]
+        make-stack ["pushq %rbp"
+                    "movq %rsp, %rbp"
+                    (str "subq $" (* 4 (count (enumerate-vars instrs))) ", %rsp")]
+        after []
+        whole (concat before make-stack asm-lines after)]
     (clojure.string/join "\n" whole)))

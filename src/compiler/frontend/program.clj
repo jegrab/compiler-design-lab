@@ -44,7 +44,9 @@
    env])
 
 (defmethod stmt/to-ir ::return [ret]
-  (expr/to-ir (::ret-expr ret) ::ir/ret-register))
+  (conj
+   (expr/to-ir (::ret-expr ret) ::ir/ret-register)
+   [::ir/return]))
 
 (defmulti is-return ::ast/kind)
 (defmethod is-return ::return [_] true)
