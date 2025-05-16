@@ -25,13 +25,8 @@
   (.flush *out*)
   (System/exit 7))
 
-(defn- main [& args]
-  (when (not= 2 (count args))
-    (println "needs exactly two command line arguments. got " args)
-    (exit-illegal-arguments))
-  (let [input-file-str (first args)
-        output-file-str (last args)
-        input-file (try (slurp input-file-str)
+(defn- main [input-file-str output-file-str] 
+  (let [input-file (try (slurp input-file-str)
                         (catch java.io.FileNotFoundException e
                           (do
                             (println "input file '" input-file-str "' not found.")
@@ -47,7 +42,6 @@
         pp (clojure.string/join "\n" (mapv ast/pretty-print asts))
         ir (when asts (p/to-ir asts))
         asm (ir/make-code ir)]
-    (println "args: " args)
     (println "input: \n" (str pp) "\n")
     (println "parser errors: \n" (clojure.string/join "\n" (map ::err/message parser-errors)) "\n")
     (println "semantic errors: \n" (clojure.string/join "\n" (map ::err/message semantic-errors)) "\n")
@@ -61,11 +55,17 @@
     (spit output-file-str asm))
   (System/exit 0))
 
-(println "cmd args:" *command-line-args*)
 
-(try
-  (apply main *command-line-args*)
-  (catch clojure.lang.ExceptionInfo e 
-    (println "error: " (-> e ex-data :cause))
-    (println "exiting with " (-> e ex-data :exitcode))
-    (System/exit (-> e ex-data :exitcode))))
+(defn -main [& args]
+  (when (not= 2 (count args))
+    (println "needs exactly two command line arguments. got " args)
+    (exit-illegal-arguments))
+  (try
+    (println "input: " (first args) " output: " (second args))
+    (main (first args) (second args))
+    (catch clojure.lang.ExceptionInfo e
+      (println "error: " (-> e ex-data :cause))
+      (println "exiting with " (-> e ex-data :exitcode))
+      (System/exit (-> e ex-data :exitcode)))))
+
+

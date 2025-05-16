@@ -2,8 +2,8 @@ CLJ_JAR=clojure/clojure-1.12.0.jar
 SPEC_ALPHA_JAR=clojure/spec.alpha-0.5.238.jar
 CORE_SPECS_ALPHA_JAR=clojure/core.specs.alpha-0.4.74.jar
 SRC_DIR=src
-OUT_DIR=out
-
+OUT_DIR=classes
+ 
 CLASSPATH=$(CLJ_JAR):$(SPEC_ALPHA_JAR):$(CORE_SPECS_ALPHA_JAR):$(SRC_DIR)
 
 build:
@@ -14,7 +14,7 @@ interpret:
 	java -cp "$(CLASSPATH)" clojure.main $(SRC_DIR)/compiler/core.clj justSomeArg
 
 run:
-	java -cp "$(CLASSPATH)" compiler.core
+	java -cp "$(CLASSPATH):$(OUT_DIR)" compiler.core $(ARGS)
 
 clean:
 	rm -rf $(OUT_DIR)
