@@ -14,9 +14,13 @@
 (def space-char #{\space \tab \newline \return})
 
 (defn- skip-spaces [input]
-  (if (space-char (in/current input))
+  (cond
+    (not input) nil
+
+    (space-char (in/current input))
     (skip-spaces (in/move input))
-    input))
+    
+    :else input))
 
 (defn- one-of-pred
   "takes a string of possible char values and returns a predicate.
@@ -124,8 +128,8 @@
                  (dec depth))
     
           (= nil (in/current input))
-          input
-    
+          nil
+          
           :else
           (recur (in/move input)
                  depth)))
@@ -135,9 +139,10 @@
 
 (defn- skip-comments [input]
   (let [in2 (skip-comment input)]
-    (if (= in2 input)
-      input
-      (recur in2))))
+    (cond
+      (not in2) nil
+      (= in2 input) input
+      :else (recur in2))))
 
 (defn- lex-one-token [input]
   (condp #(%1 %2) (in/current input)
