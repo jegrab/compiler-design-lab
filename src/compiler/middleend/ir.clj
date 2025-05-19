@@ -35,7 +35,6 @@
 (defmulti codegen (fn [instr var-ids] (first instr)))
 
 (defn read-stack [offset]
-  (println "read off " offset)
   (str " -" offset "(%rsp)"))
 
 (defmethod codegen ::return [ret var-ids]

@@ -56,7 +56,6 @@
 (defn build-ast [source-str]
   (let [tokens (lex/lex source-str)
         stmts (p/run program-parser tokens)]
-    (println "tokens:" (map ::lex/kind tokens) "\n\n")
 
     (cond
       (some err/has-error? tokens)

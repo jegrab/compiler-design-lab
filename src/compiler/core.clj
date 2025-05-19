@@ -50,8 +50,6 @@
       (exit-parsing))
     (when-not (empty? semantic-errors)
       (throw-semantic-analysis))
-    (println ir)
-    (println asm)
     (spit output-file-str asm))
   (System/exit 0))
 
@@ -68,4 +66,13 @@
       (println "exiting with " (-> e ex-data :exitcode))
       (System/exit (-> e ex-data :exitcode)))))
 
+
+;(require '[clj-async-profiler.core :as prof])
+
+;(prof/profile (-main "./test-programs/test.c0" "./test-programs out"))
+
+;; The resulting flamegraph will be stored in /tmp/clj-async-profiler/results/
+;; You can view the HTML file directly from there or start a local web UI:
+
+;(prof/serve-ui 8080) ; Serve on port 8080
 
