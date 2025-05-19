@@ -8,22 +8,13 @@
   (:gen-class))
 
 (defn- exit-illegal-arguments []
-  (throw (ex-info "illegal arguments error" {:exitcode 1 :cause "illegal arguments"}))
-  (println "exit with illegal argument error")
-  (.flush *out*)
-  (System/exit 1))
+  (throw (ex-info "illegal arguments error" {:exitcode 1 :cause "illegal arguments"})))
 
 (defn- exit-parsing []
-  (throw (ex-info "parser error" {:exitcode 42 :cause "parser error"}))
-  (println "exit with parser error")
-  (.flush *out*)
-  (System/exit 42))
+  (throw (ex-info "parser error" {:exitcode 42 :cause "parser error"})))
 
 (defn- throw-semantic-analysis []
-  (throw (ex-info "semantic analysis error" {:exitcode 7 :cause "semantic error"}))
-  (println "exit with semantic analysis error")
-  (.flush *out*)
-  (System/exit 7))
+  (throw (ex-info "semantic analysis error" {:exitcode 7 :cause "semantic error"})))
 
 (defn- main [input-file-str output-file-str] 
   (let [input-file (try (slurp input-file-str)
@@ -50,8 +41,7 @@
       (exit-parsing))
     (when-not (empty? semantic-errors)
       (throw-semantic-analysis))
-    (spit output-file-str asm))
-  (System/exit 0))
+    (spit output-file-str asm)))
 
 
 (defn -main [& args]
@@ -61,18 +51,9 @@
   (try
     (println "input: " (first args) " output: " (second args))
     (main (first args) (second args))
+    (System/exit 0)
     (catch clojure.lang.ExceptionInfo e
       (println "error: " (-> e ex-data :cause))
       (println "exiting with " (-> e ex-data :exitcode))
       (System/exit (-> e ex-data :exitcode)))))
-
-
-;(require '[clj-async-profiler.core :as prof])
-
-;(prof/profile (-main "./test-programs/test.c0" "./test-programs out"))
-
-;; The resulting flamegraph will be stored in /tmp/clj-async-profiler/results/
-;; You can view the HTML file directly from there or start a local web UI:
-
-;(prof/serve-ui 8080) ; Serve on port 8080
 
