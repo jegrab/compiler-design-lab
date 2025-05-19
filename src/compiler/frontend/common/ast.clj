@@ -25,5 +25,4 @@
 (defmulti execute "evaluates the node." (fn [ast state] (::kind ast)))
 
 (defn collect-errors [ast] 
-  (concat (apply concat (map collect-errors (map #(% ast) (::children ast))))
-          (::err/errors ast)))
+  (apply concat (map ::err/errors (tree-seq ::kidn ::children ast))))
