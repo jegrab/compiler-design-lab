@@ -166,7 +166,7 @@
 (defrecord Multiparser [parser-rules name]
   Parser
   (run [this input]
-    (let [runs (map (fn [rule] (run rule input)) @parser-rules)
+    (let [runs (map (fn [[rule-name rule]] (run rule input)) @parser-rules)
           successful (filter ::success runs)
           num-sucesses (count successful)]
       (cond
@@ -184,9 +184,9 @@
 (defmacro defmultiparser
   {:clj-kondo/lint-as 'declare}
   [name]
-  `(def ~name (->Multiparser (atom []) (quote ~name))))
+  `(def ~name (->Multiparser (atom {}) (quote ~name))))
 
-(defmacro defrule [name & stuff]
+(defmacro defrule [multi-name rule-name & stuff]
   (let [options (if (map? (first stuff)) (first stuff) {})
         stuff (if (map? (first stuff)) (rest stuff) stuff)
         by-other (not (vector? (first stuff)))
@@ -196,8 +196,8 @@
         res-expr (if-not by-other (first stuff) nil)]
     (when-not (empty? options) (throw (Exception. "options currently not supported.")))
     (if by-other
-      `(swap! (:parser-rules ~name) #(conj % ~defining-parser))
-      `(swap! (:parser-rules ~name) #(conj % (p-let ~defining-rules ~res-expr))))))
+      `(swap! (:parser-rules ~multi-name) #(assoc % ~rule-name ~defining-parser))
+      `(swap! (:parser-rules ~multi-name) #(assoc % ~rule-name (p-let ~defining-rules ~res-expr))))))
 
 
 (defn- try-all-children [parsers input]

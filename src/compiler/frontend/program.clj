@@ -28,7 +28,7 @@
    stmts))
 
 
-(p/defrule stmt/parse-statement
+(p/defrule stmt/parse-statement ::return
   [_ (token ::lex/return)
    ret-expr expr/parse-expr
    _ (token ::lex/semicolon)]

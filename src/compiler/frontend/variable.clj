@@ -43,7 +43,7 @@
 (defmethod expr/to-ir ::identifier [id into]
   [[::ir/assign into (::id id)]])
 
-(p/defrule stmt/parse-statement
+(p/defrule stmt/parse-statement ::declaration
   [type (token ::lex/int)
    name (token ::lex/identifier)
    value (p/maybe (p/p-let [_ (token ::lex/assign)
@@ -80,12 +80,12 @@
     []))
 
 (p/defmultiparser asnop-parser)
-(p/defrule asnop-parser [_ (token ::lex/assign)] ::assign)
-(p/defrule asnop-parser [_ (token ::lex/plus-assign)] ::plus-assign)
-(p/defrule asnop-parser [_ (token ::lex/minus-assign)] ::minus-assign)
-(p/defrule asnop-parser [_ (token ::lex/mul-assign)] ::mul-assign)
-(p/defrule asnop-parser [_ (token ::lex/div-assign)] ::div-assign)
-(p/defrule asnop-parser [_ (token ::lex/mod-assign)] ::mod-assign)
+(p/defrule asnop-parser ::assign [_ (token ::lex/assign)] ::assign)
+(p/defrule asnop-parser ::plus-assign [_ (token ::lex/plus-assign)] ::plus-assign)
+(p/defrule asnop-parser ::minus-assign [_ (token ::lex/minus-assign)] ::minus-assign)
+(p/defrule asnop-parser ::mul-assign [_ (token ::lex/mul-assign)] ::mul-assign)
+(p/defrule asnop-parser ::div-assign [_ (token ::lex/div-assign)] ::div-assign)
+(p/defrule asnop-parser ::mod-assign [_ (token ::lex/mod-assign)] ::mod-assign)
 
 
 (defmulti is-l-value ::ast/kind)
@@ -93,7 +93,7 @@
 (defmethod is-l-value ::identifier [_] true)
 
 
-(p/defrule stmt/parse-statement
+(p/defrule stmt/parse-statement ::assignment
   [lv expr/parse-expr
    asnop asnop-parser
    expr expr/parse-expr
