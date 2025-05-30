@@ -1,12 +1,13 @@
 (ns compiler.frontend.common.parser
-  (:require [clojure.spec.alpha :as s]))
+  (:require [clojure.spec.alpha :as s]
+            [compiler.frontend.common.position :as pos]))
 
 (s/def ::input seq?)
 (s/def ::remaining ::input)
 (s/def ::expected (s/and coll? ::combinator))
 (s/def ::success boolean?)
 
-(s/def ::success-result (s/keys :req [::value]))
+(s/def ::success-result (s/keys :req [::value ::pos/span]))
 (s/def ::failure-result (s/keys :req [::expected]))
 (s/def ::result (s/and
                  (s/keys :req [::remaining ::success])
@@ -20,7 +21,7 @@
                             :opt [::name]))
 
 (defprotocol Parser
-  (run [parser input] "runs the parsen on the input and returns a ::result")
+  (run [parser input] "runs the parser on the input and returns a ::result")
   (map-success [parser mapper] "returns an equivalent parser, but with the successful result value applied to mapper."))
 
 (defn- map-result [mapper result]
@@ -48,6 +49,7 @@
   (->SimpleParser (fn [input]
                     (if (predicate (first input))
                       {::remaining (rest input)
+                       ::pos/span (::pos/span (first input))
                        ::success true
                        ::value (first input)}
                       {::remaining input
@@ -60,6 +62,7 @@
     (if (this (first input))
       {::remaining (rest input)
        ::success true
+       ::pos/span (::pos/span (first input))
        ::value (first input)}
       {::remaining input
        ::success false
@@ -75,15 +78,19 @@
   [parser]
   (->SimpleParser
    (fn [input]
-     (loop [input input
-            res []]
-       (let [p-res (run parser input)]
-         (if (::success p-res)
-           (recur (::remaining p-res)
-                  (conj res (::value p-res)))
-           {::remaining (::remaining p-res)
-            ::success true
-            ::value res}))))))
+     (let [start-pos (::pos/start (::pos/span (first input)))]
+       (loop [input input
+              res []
+              end-pos start-pos]
+         (let [p-res (run parser input)]
+           (if (::success p-res)
+             (recur (::remaining p-res)
+                    (conj res (::value p-res))
+                    (::pos/end (::pos/span p-res)))
+             {::remaining (::remaining p-res)
+              ::success true
+              ::pos/span (pos/span-from-to start-pos end-pos)
+              ::value res})))))))
 
 (defn maybe 
   "tries to apply the parser.
@@ -92,9 +99,10 @@
   [parser]
   (->SimpleParser 
    (fn [input]
-     (let [r (run parser input)]
+     (let [r (run parser input)
+           start-pos (::pos/start (::pos/span (first input)))]
        (if (::success r) r
-           {::value nil ::success true ::remaining input})))))
+           {::value nil ::success true ::remaining input ::pos/span (pos/span-from-to start-pos start-pos)})))))
 
 (defn parse-seq
   "takes a collection of pairs [key parser] and returns a parser that runs all parsers in order and returns a map with each result mapped to the specified key."
@@ -102,24 +110,28 @@
    (let [expected (or expected [(map second parsers)])
          success-options (or success-options {})]
      (->SimpleParser (fn [initial-input]
-                       (loop [parsers parsers
-                              input initial-input
-                              val {}]
-                         (if (empty? parsers)
-                           (merge
-                            success-options
-                            {::remaining input
-                             ::success true
-                             ::value val})
-                           (let [[key parser] (first parsers)
-                                 res (run parser input)]
-                             (if (::success res)
-                               (recur (rest parsers)
-                                      (::remaining res)
-                                      (assoc val key (::value res)))
-                               {::remaining initial-input
-                                ::success false
-                                ::expected expected})))))))))
+                       (let [start-pos (::pos/start (::pos/span (first initial-input)))]
+                        (loop [parsers parsers
+                               input initial-input
+                               val {}
+                               end-pos start-pos]
+                          (if (empty? parsers)
+                            (merge
+                             success-options
+                             {::remaining input
+                              ::success true
+                              ::pos/span (pos/span-from-to start-pos end-pos)
+                              ::value val})
+                            (let [[key parser] (first parsers)
+                                  res (run parser input)]
+                              (if (::success res)
+                                (recur (rest parsers)
+                                       (::remaining res)
+                                       (assoc val key (::value res))
+                                       (::pos/end (::pos/span res)))
+                                {::remaining initial-input
+                                 ::success false
+                                 ::expected expected}))))))))))
 
 (defn- make-seq-input
   "takes a definition for the defparser macro (a collection [key1 parser1 key2 parser2 ...])
@@ -178,9 +190,6 @@
   (map-success [this mapper]
     (map-success (->SimpleParser (fn [input] (run this input))) mapper)))
 
-(defn add-rule-to-multi [multiparser rule]
-  (update multiparser :parser-rules #(conj % rule)))
-
 (defmacro defmultiparser
   {:clj-kondo/lint-as 'declare}
   [name]
@@ -194,9 +203,8 @@
         defining-rules (if-not by-other (first stuff) nil)
         stuff (if-not by-other (rest stuff) nil)
         res-expr (if-not by-other (first stuff) nil)]
-    (when-not (empty? options) (throw (Exception. "options currently not supported.")))
     (if by-other
-      `(swap! (:parser-rules ~multi-name) #(assoc % ~rule-name ~defining-parser))
+      `(swap! (:parser-rules ~multi-name) #(assoc % ~rule-name (map-success ~defining-parser post-processor)))
       `(swap! (:parser-rules ~multi-name) #(assoc % ~rule-name (p-let ~defining-rules ~res-expr))))))
 
 
@@ -234,6 +242,7 @@
                        (if (::success rhs)
                          {::value ((::result-fn prefix-res) (::value prefix-res) (::value rhs))
                           ::success true
+                          ::pos/span (pos/merge-spans (::pos/span prefix-res) (::pos/span rhs))
                           ::remaining (::remaining rhs)} 
                          nil))
 
@@ -256,6 +265,7 @@
               (recur
                {::value ((::result-fn postfix-res) (::value postfix-res) (::value lhs))
                 ::success true
+                ::pos/span (pos/merge-spans (::pos/span lhs) (::pos/span postfix-res))
                 ::remaining (::remaining postfix-res)}
                (::remaining postfix-res))))
           
@@ -269,6 +279,7 @@
                   (recur
                    {::value ((::result-fn infix-res) (::value infix-res) (::value lhs) (::value rhs))
                     ::success true
+                    ::pos/span (pos/merge-spans (::pos/span lhs) (::pos/span rhs))
                     ::remaining (::remaining rhs)} 
                    (::remaining rhs))
                   {::remaining initial-input ::expected [(:name pratt)] ::success false})))))))))

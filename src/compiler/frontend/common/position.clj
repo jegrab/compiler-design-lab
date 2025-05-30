@@ -21,4 +21,6 @@
 
 (defn span-from-to [start end] {::start start ::end end})
 
+(defn merge-spans [start-span end-span] {::start (::start start-span) ::end (::end end-span)})
+
 (def initial-position {::line 1 ::column 1})
