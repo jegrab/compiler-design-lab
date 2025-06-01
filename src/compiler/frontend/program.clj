@@ -5,6 +5,7 @@
             [compiler.frontend.statement :as stmt] 
             [compiler.frontend.expression :as expr]
             [compiler.frontend.variable :as var]
+            [compiler.frontend.integer :as int]
             [compiler.frontend.common.namespace :as name]
             [compiler.middleend.ir :as ir]
             
