@@ -92,7 +92,7 @@
         type (::type/type decl)
         new-env (assoc-in env [::types (::id decl)] type)
         decl (assoc decl ::value new-val)
-        new-decl (if (type/equals type (::type/type new-val))
+        new-decl (if (or (not new-val) (type/equals type (::type/type new-val)))
                    decl
                    (err/add-error decl (err/make-semantic-error (str "type mismatch. declared: " type " actual: " (::type/type new-val)))))]
     [new-decl new-env]))
