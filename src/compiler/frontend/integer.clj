@@ -9,13 +9,15 @@
    [compiler.frontend.expression :as expr] 
    [compiler.middleend.ir :as ir]))
 
+(def int-type (type/simple-type ::integer))
+
 (defn- token [kind]
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
 (p/defrule type/parse ::integer
   [i (token ::lex/int)]
-  (type/simple-type ::integer))
+  int-type)
 
 (p/def-op expr/parse-expr numerical-constant
   [i (token ::lex/numerical-constant)]
@@ -42,7 +44,7 @@
   [[::ir/assign into (::value c)]])
 
 (defmethod expr/typecheck ::numerical-constant [c _]
-  (assoc c ::type/type (type/simple-type ::integer)))
+  (assoc c ::type/type int-type))
 
 
 (p/def-op expr/parse-expr unary-minus
@@ -54,7 +56,7 @@
    ::child e})
 
 (defmethod ast/pretty-print ::unary-minus [n]
-  (str "(-" (::child n) ")"))
+  (str "(-" (ast/pretty-print (::child n)) ")"))
 
 (defmethod expr/to-ir ::unary-minus [n into]
   (let [tmp (id/make-tmp)

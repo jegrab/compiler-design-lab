@@ -1,0 +1,60 @@
+(ns compiler.frontend.block
+  (:require [compiler.frontend.common.ast :as ast]
+            [compiler.frontend.common.lexer :as lex]
+            [compiler.frontend.common.parser :as p]
+            [compiler.frontend.statement :as stmt]
+            [compiler.frontend.common.namespace :as name]))
+
+(defn- token [kind]
+  (fn [tok]
+    (= (::lex/kind tok) kind)))
+
+(def parse-block (p/p-let [_ (token ::lex/left-brace)
+                     stmts (p/many stmt/parse-statement)
+                     _ (token ::lex/right-brace)] 
+                    {::ast/kind ::block
+                     ::ast/children [::stmts]
+                     ::stmts stmts}))
+
+(p/defrule stmt/parse-statement ::block parse-block)
+
+(defmethod ast/pretty-print ::block [block]
+  (str "{\n" (apply concat (map ast/pretty-print (::stmts block))) "}\n"))
+
+(defmethod name/resolve-names-stmt ::block [block env]
+  (let [new-stmts (loop [old-stmts (::stmts block)
+                         new-stmts []
+                         env env]
+                    (if (empty? old-stmts)
+                      new-stmts
+                      (let [[s e] (name/resolve-names-stmt (first old-stmts) env)]
+                        (recur (rest old-stmts)
+                               (conj new-stmts s)
+                               e))))]
+    [(assoc block
+            ::stmts new-stmts)
+     env]))
+
+(defmethod stmt/typecheck ::block [block env]
+  (let [new-stmts (loop [old-stmts (::stmts block)
+                         new-stmts []
+                         env env]
+                    (if (empty? old-stmts)
+                      new-stmts
+                      (let [[s e] (stmt/typecheck (first old-stmts) env)]
+                        (recur (rest old-stmts)
+                               (conj new-stmts s)
+                               e))))]
+    [(assoc block
+            ::stmts new-stmts)
+     env]))
+
+(defmethod stmt/to-ir ::block [block]
+  (loop [stmts (::stmts block)
+         res []]
+    (if (empty? stmts)
+      res
+      (recur 
+       (rest stmts)
+       (into [] (concat res (stmt/to-ir (first stmts))))))))
+

@@ -33,6 +33,7 @@
         pp (clojure.string/join "\n" (mapv ast/pretty-print asts))
         ir (when asts (p/to-ir asts))
         asm (ir/make-code ir)]
+    (println "ast:" asts)
     (println "input: \n" (str pp) "\n")
     (println "parser errors: \n" (clojure.string/join "\n" (map ::err/message parser-errors)) "\n")
     (println "semantic errors: \n" (clojure.string/join "\n" (map ::err/message semantic-errors)) "\n")

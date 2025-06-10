@@ -15,12 +15,18 @@
   (fn [ast] (::kind ast)))
 
 (defmethod check-after-parse :default [ast]
-   (loop [ast ast
-          children (::children ast)]
-     (if (empty? children) ast
-       (let [new-child (check-after-parse ((first children) ast))]
-         (recur (assoc ast (first children) new-child)
-                (rest children))))))
+  (if (vector? ast)
+    (mapv check-after-parse ast)
+    (loop [ast ast
+           children (::children ast)]
+      (if (empty? children) ast
+          (let [new-child (check-after-parse ((first children) ast))]
+            (recur (assoc ast (first children) new-child)
+                   (rest children)))))))
 
 (defn collect-errors [ast] 
-  (apply concat (map ::err/errors (tree-seq ::kind (fn [node] (map #(% node) (::children node))) ast))))
+  (apply concat (map ::err/errors (tree-seq (fn [n] (or (::kind n) (vector? n)))
+                                            (fn [node]
+                                              (if (vector? node)
+                                                node
+                                                (map #(% node) (::children node)))) ast))))

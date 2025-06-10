@@ -7,6 +7,7 @@
             [compiler.frontend.variable :as var]
             [compiler.frontend.integer :as int]
             [compiler.frontend.intasnop :as intasnop]
+            [compiler.frontend.block :as block]
             [compiler.frontend.common.namespace :as name]
             [compiler.middleend.ir :as ir]
             [compiler.frontend.common.error :as err]
@@ -15,20 +16,6 @@
 (defn- token [kind]
   (fn [tok]
     (= (::lex/kind tok) kind)))
-
-(def program-parser
-  (p/p-let
-   [_ (token ::lex/int)
-    _ (fn [tok] (and (= (::lex/kind tok) ::lex/identifier)
-                     (= (::lex/source-string tok) "main")))
-    _ (token ::lex/left-parentheses)
-    _ (token ::lex/right-parentheses)
-    _ (token ::lex/left-brace)
-    stmts (p/many stmt/parse-statement)
-    _ (token ::lex/right-brace)
-    _ (p/end-of-file)]
-   stmts))
-
 
 (p/defrule stmt/parse-statement ::return
   [_ (token ::lex/return)
@@ -65,18 +52,34 @@
 (defmethod is-return ::return [_] true)
 (defmethod is-return :default [_] false)
 
+
+(def program-parser
+  (p/p-let
+   [_ (token ::lex/int)
+    _ (fn [tok] (and (= (::lex/kind tok) ::lex/identifier)
+                     (= (::lex/source-string tok) "main")))
+    _ (token ::lex/left-parentheses)
+    _ (token ::lex/right-parentheses)
+    body block/parse-block
+    _ (p/end-of-file)]
+   {::ast/kind ::program
+    ::ast/children [::body]
+    ::body body
+    ::ret-type int/int-type}))
+
 (defn build-ast [source-str]
   (let [tokens (lex/lex source-str)
-        stmts (p/run program-parser tokens)]
-
+        prog (p/run program-parser tokens)
+        ret-type (::ret-type prog)]
     (cond
       (some err/has-error? tokens)
       {::code nil
        ::errors #{(err/make-parser-error "illegal token detected")}}
 
-      (::p/success stmts)
-      (let [analysed (loop [env var/default-env
-                            to-do (::p/value stmts)
+      (::p/success prog)
+      (let [analysed (loop [env (assoc var/default-env
+                                       ::ret-type int/int-type)
+                            to-do (::block/stmts (::body (::p/value prog)))
                             done []
                             has-return false]
                        (if (empty? to-do)
