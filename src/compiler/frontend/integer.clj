@@ -48,7 +48,7 @@
 
 
 (p/def-op expr/parse-expr unary-minus
-  {:precedence 4}
+  {:precedence 13}
   [_ (token ::lex/minus)
    e expr/parse-expr]
   {::ast/kind ::unary-minus
@@ -65,8 +65,15 @@
           [::ir/assign into [::ir/negate tmp]]))) ; todo: unary minus instead negate
 
 (defmethod expr/typecheck ::unary-minus [n env]
-  (let [t (::type/type (expr/typecheck (::child n) env))]
-    (assoc n ::type/type t)))
+  (let [new-c (expr/typecheck (::child n) env)
+        t (::type/type new-c)
+        new-n (assoc n
+                     ::type/type int-type
+                     ::child new-c)]
+    (if (type/equals t int-type)
+      new-n
+      (err/add-error new-n
+                     (err/make-semantic-error (str "type mismatch: unary minus requires int but got " t))))))
 
 
 (defn bin-op-node [op left right]
@@ -97,7 +104,7 @@
 
 
 (p/def-op expr/parse-expr plus
-  {:precedence 2 :associates :left}
+  {:precedence 11 :associates :left}
   [left expr/parse-expr
    _ (token ::lex/plus)
    right expr/parse-expr]
@@ -111,7 +118,7 @@
 
 
 (p/def-op expr/parse-expr minus
-  {:precedence 2 :associates :left}
+  {:precedence 11 :associates :left}
   [left expr/parse-expr
    _ (token ::lex/minus)
    right expr/parse-expr]
@@ -125,7 +132,7 @@
 
 
 (p/def-op expr/parse-expr mul
-  {:precedence 3 :associates :left}
+  {:precedence 12 :associates :left}
   [left expr/parse-expr
    _ (token ::lex/mul)
    right expr/parse-expr]
@@ -138,7 +145,7 @@
 (defmethod expr/typecheck ::mul [p env] (typecheck-bin-op p env))
 
 (p/def-op expr/parse-expr div
-  {:precedence 3 :associates :left}
+  {:precedence 12 :associates :left}
   [left expr/parse-expr
    _ (token ::lex/div)
    right expr/parse-expr]
@@ -151,7 +158,7 @@
 (defmethod expr/typecheck ::div [p env] (typecheck-bin-op p env))
 
 (p/def-op expr/parse-expr mod
-  {:precedence 3 :associates :left}
+  {:precedence 12 :associates :left}
   [left expr/parse-expr
    _ (token ::lex/mod)
    right expr/parse-expr]

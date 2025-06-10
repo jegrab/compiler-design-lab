@@ -63,6 +63,14 @@
          (str "movl %eax, " (read-stack dest-offset))])
 
       (and (vector? input)
+           (= ::negate (first input)))
+      (let [source-offset (* 4 (var-ids (second input)))]
+        [(str "movl " (read-stack source-offset) ", %eax")
+         "test %eax, %eax"
+         "setz %eax"
+         (str "movl %eax, " (read-stack dest-offset))])
+
+      (and (vector? input)
            (#{::plus ::minus ::mul} (first input)))
       (let [left-offset (* 4 (var-ids (nth input 1)))
             right-offset (* 4 (var-ids (nth input 2)))]
@@ -70,7 +78,7 @@
          (str "movl " (read-stack right-offset) ", %ebx")
          (str ({::plus "addl" ::minus "subl" ::mul "imull"} (first input)) " " "%ebx, %eax")
          (str "movl %eax, " (read-stack dest-offset))])
-      
+
       (and (vector? input)
            (= ::div (first input)))
       (let [left-offset (* 4 (var-ids (nth input 1)))
@@ -78,9 +86,9 @@
         [(str "movl " (read-stack left-offset) ", %eax")
          "cltd"
          (str "movl " (read-stack right-offset) ", %ebx")
-         (str "idivl %ebx") 
+         (str "idivl %ebx")
          (str "movl %eax, " (read-stack dest-offset))])
-      
+
       (and (vector? input)
            (= ::mod (first input)))
       (let [left-offset (* 4 (var-ids (nth input 1)))

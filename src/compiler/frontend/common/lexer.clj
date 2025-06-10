@@ -149,7 +149,7 @@
     nil? nil
     (one-of-pred "(){};") (make-one-char-token input ::separator)
     #(= % \=) (make-one-char-token input ::operator)
-    (one-of-pred "+-*/%") (make-multi-char-token input ::operator (optional-trailing-assignment))
+    (one-of-pred "+-*/%!") (make-multi-char-token input ::operator (optional-trailing-assignment))
     #(= % \0) (assoc-in (make-multi-char-token input ::numerical-constant (starting-with-zero))
                         [0 ::num-kind] ::hex)
     (one-of-pred "123456789") (assoc-in
@@ -185,6 +185,7 @@
 
 (defmethod postprocess-token ::operator [token]
   (case (::source-string token)
+    "!" (add-kind token ::log-not)
     "=" (add-kind token ::assign)
     "+" (add-kind token ::plus)
     "+=" (add-kind token ::plus-assign)

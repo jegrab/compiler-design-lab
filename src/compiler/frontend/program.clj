@@ -6,6 +6,7 @@
             [compiler.frontend.expression :as expr]
             [compiler.frontend.variable :as var]
             [compiler.frontend.integer :as int]
+            [compiler.frontend.bool :as bool]
             [compiler.frontend.intasnop :as intasnop]
             [compiler.frontend.block :as block]
             [compiler.frontend.common.namespace :as name]
@@ -71,6 +72,7 @@
   (let [tokens (lex/lex source-str)
         prog (p/run program-parser tokens)
         ret-type (::ret-type prog)]
+    (println "tokens: " tokens)
     (cond
       (some err/has-error? tokens)
       {::code nil
