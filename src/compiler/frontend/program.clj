@@ -72,7 +72,6 @@
   (let [tokens (lex/lex source-str)
         prog (p/run program-parser tokens)
         ret-type (::ret-type prog)]
-    (println "tokens: " tokens)
     (cond
       (some err/has-error? tokens)
       {::code nil
@@ -96,7 +95,7 @@
                                   (conj done stmt)
                                   (or has-return (is-return stmt))))))]
         analysed)
-      
+
       :else
       {::code nil
        ::errors #{(err/make-parser-error "unknown fatal parser error")}})))
