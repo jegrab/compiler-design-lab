@@ -63,7 +63,7 @@
           [::ir/assign into [::ir/negate tmp]]))) ; todo: unary minus instead negate
 
 (defmethod expr/typecheck ::unary-minus [n env]
-  (let [t (::type/type (expr/typecheck n env))]
+  (let [t (::type/type (expr/typecheck (::child n) env))]
     (assoc n ::type/type t)))
 
 
