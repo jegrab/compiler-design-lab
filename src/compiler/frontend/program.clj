@@ -6,10 +6,11 @@
             [compiler.frontend.expression :as expr]
             [compiler.frontend.variable :as var]
             [compiler.frontend.integer :as int]
+            [compiler.frontend.intasnop :as intasnop]
             [compiler.frontend.common.namespace :as name]
             [compiler.middleend.ir :as ir]
-            
-            [compiler.frontend.common.error :as err]))
+            [compiler.frontend.common.error :as err]
+            [compiler.frontend.common.type :as type]))
 
 (defn- token [kind]
   (fn [tok]
@@ -50,6 +51,16 @@
    (expr/to-ir (::ret-expr ret) ::ir/ret-register)
    [::ir/return]))
 
+(defmethod stmt/typecheck ::return [ret env]
+  (let [decl-type (env ::ret-type)
+        new-expr (expr/typecheck (::ret-expr ret) env)
+        actual-type (::type/type new-expr)
+        new-ret (assoc ret ::ret-expr new-expr)]
+    [(if (type/equals decl-type actual-type)
+       new-ret
+       (err/add-error new-ret (str "type mismatch. should return " decl-type " but returns " actual-type))) 
+     env]))
+
 (defmulti is-return ::ast/kind)
 (defmethod is-return ::return [_] true)
 (defmethod is-return :default [_] false)
@@ -73,7 +84,8 @@
                           ::errors (if-not has-return
                                      #{(err/make-semantic-error "missing return statement")}
                                      nil)}
-                         (let [[stmt new-env] (name/resolve-names-stmt (ast/check-after-parse (first to-do)) env)]
+                         (let [[stmt new-env] (name/resolve-names-stmt (ast/check-after-parse (first to-do)) env)
+                               [stmt new-env] (stmt/typecheck stmt new-env)]
                            (recur new-env
                                   (rest to-do)
                                   (conj done stmt)

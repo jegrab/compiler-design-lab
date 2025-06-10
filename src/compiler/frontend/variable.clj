@@ -7,13 +7,14 @@
             [compiler.frontend.common.error :as err]
             [compiler.frontend.common.namespace :as name]
             [compiler.frontend.common.id :as id]
+            [compiler.frontend.common.type :as type]
             [compiler.middleend.ir :as ir]))
 
 (defn- token [kind]
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
-(def default-env {::names {} ::initialized {} ::declared {}})
+(def default-env {::names {} ::initialized {} ::declared {} ::types {}})
 
 (def ^:dynamic in-l-value false)
 
@@ -40,11 +41,15 @@
     :else
     (assoc ident ::id ((::names env) (::name ident)))))
 
+(defmethod expr/typecheck ::identifier [id env]
+  (assoc id ::type/type (or ((::types env) (::id id)) type/unknown)))
+
 (defmethod expr/to-ir ::identifier [id into]
   [[::ir/assign into (::id id)]])
 
+
 (p/defrule stmt/parse-statement ::declaration
-  [type (token ::lex/int)
+  [type type/parse
    name (token ::lex/identifier)
    value (p/maybe (p/p-let [_ (token ::lex/assign)
                             e expr/parse-expr]
@@ -52,6 +57,7 @@
    _ (token ::lex/semicolon)]
   {::ast/kind ::declare
    ::ast/children [::value]
+   ::type/type type
    ::value value
    ::name (::lex/source-string name)})
 
@@ -79,68 +85,64 @@
     (expr/to-ir (::value decl) (::id decl))
     []))
 
-(p/defmultiparser asnop-parser)
-(p/defrule asnop-parser ::assign [_ (token ::lex/assign)] ::assign)
-(p/defrule asnop-parser ::plus-assign [_ (token ::lex/plus-assign)] ::plus-assign)
-(p/defrule asnop-parser ::minus-assign [_ (token ::lex/minus-assign)] ::minus-assign)
-(p/defrule asnop-parser ::mul-assign [_ (token ::lex/mul-assign)] ::mul-assign)
-(p/defrule asnop-parser ::div-assign [_ (token ::lex/div-assign)] ::div-assign)
-(p/defrule asnop-parser ::mod-assign [_ (token ::lex/mod-assign)] ::mod-assign)
-
+(defmethod stmt/typecheck ::declare [decl env]
+  (let [new-val (if (::value decl)
+                  (expr/typecheck (::value decl) env)
+                  (::value decl))
+        type (::type/type decl)
+        new-env (assoc-in env [::types (::id decl)] type)
+        decl (assoc decl ::value new-val)
+        new-decl (if (type/equals type (::type/type new-val))
+                   decl
+                   (err/add-error decl (err/make-semantic-error (str "type mismatch. declared: " type " actual: " (::type/type new-val)))))]
+    [new-decl new-env]))
 
 (defmulti is-l-value ::ast/kind)
 (defmethod is-l-value :default [_] false)
 (defmethod is-l-value ::identifier [_] true)
 
-
-(p/defrule stmt/parse-statement ::assignment
-  [lv expr/parse-expr
-   asnop asnop-parser
-   expr expr/parse-expr
-   _ (token ::lex/semicolon)]
-  {::ast/kind ::asnop
+(defn assign-node [lv expr]
+  {::ast/kind ::assign
    ::ast/children [::expr ::l-value]
    ::l-value (if (is-l-value lv)
                lv
                (err/add-error lv (err/make-parser-error (str (ast/pretty-print lv) " is not an l-value"))))
-   ::asnop asnop
    ::expr expr})
 
-(defmethod ast/pretty-print ::asnop [asnop]
-  (str (ast/pretty-print (::l-value asnop))
-       (case (::asnop asnop)
-         ::assign "="
-         ::plus-assign "+="
-         ::minus-assign "-="
-         ::mul-assign "*="
-         ::div-assign "/="
-         ::mod-assign "%=")
-       (ast/pretty-print (::expr asnop))
+(p/defrule stmt/parse-statement ::assignment
+  [lv expr/parse-expr
+   _ (token ::lex/assign)
+   expr expr/parse-expr
+   _ (token ::lex/semicolon)]
+  (assign-node lv expr))
+
+(defmethod ast/pretty-print ::assign [assign]
+  (str (ast/pretty-print (::l-value assign))
+       "="
+       (ast/pretty-print (::expr assign))
        ";"))
 
-(defmethod name/resolve-names-stmt ::asnop [asnop env]
+(defmethod name/resolve-names-stmt ::assign [assign env]
   (let [l-v (binding
-             [in-l-value (if (= ::assign (::asnop asnop)) true false)]
-              (name/resolve-names-expr (::l-value asnop) env))
+             [in-l-value true]
+              (name/resolve-names-expr (::l-value assign) env))
         lv-id (::id l-v)
-        expr (name/resolve-names-expr (::expr asnop) env)]
-    [(assoc asnop
+        expr (name/resolve-names-expr (::expr assign) env)]
+    [(assoc assign
             ::l-value l-v
             ::expr expr)
      (assoc-in env [::initialized lv-id] true)]))
 
+(defmethod stmt/to-ir ::assign [assign]
+  (expr/to-ir (::expr assign) (::id (::l-value assign))))
 
-(defn- calc-assign [op asnop]
-  (let [tmp (id/make-tmp)]
-    (conj (expr/to-ir (::expr asnop) tmp)
-          [::ir/assign (::id (::l-value asnop)) [op (::id (::l-value asnop)) tmp]])))
-
-(defmethod stmt/to-ir ::asnop [asnop]
-  (let [tmp (id/make-tmp)]
-    (case (::asnop asnop)
-      ::assign (expr/to-ir (::expr asnop) (::id (::l-value asnop)))
-      ::plus-assign (calc-assign ::ir/plus asnop)
-      ::minus-assign (calc-assign ::ir/minus asnop) 
-      ::mul-assign (calc-assign ::ir/mul asnop) 
-      ::div-assign (calc-assign ::ir/div asnop)
-      ::mod-assign (calc-assign ::ir/mod asnop))))
+(defmethod stmt/typecheck ::assign [assign env]
+  (let [new-l-v (expr/typecheck (::l-value assign) env)
+        new-expr (expr/typecheck (::expr assign) env)
+        assign (assoc assign
+                      ::l-value new-l-v
+                      ::expr new-expr)
+        new-assign (if (type/equals (::type/type new-l-v) (::type/type new-expr))
+                     assign
+                     (err/add-error assign (err/make-semantic-error (str "type mismatch. left: " (::type/type new-l-v) " right: " (::type/type new-expr)))))]
+    [new-assign env]))

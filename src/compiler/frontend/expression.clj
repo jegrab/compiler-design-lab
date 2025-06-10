@@ -17,6 +17,8 @@
 
 (defmulti to-ir (fn [expr into] (::ast/kind expr)))
 
+(defmulti typecheck (fn [expr env] (::ast/kind expr)))
+
 (p/def-op-parser parse-expr)
 
 (defn- token [kind]

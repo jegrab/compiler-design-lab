@@ -5,13 +5,17 @@
    [compiler.frontend.common.lexer :as lex]
    [compiler.frontend.common.parser :as p]
    [compiler.frontend.common.error :as err]
-   [compiler.frontend.expression :as expr]
+   [compiler.frontend.common.type :as type]
+   [compiler.frontend.expression :as expr] 
    [compiler.middleend.ir :as ir]))
 
 (defn- token [kind]
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
+(p/defrule type/parse ::integer
+  [i (token ::lex/int)]
+  (type/simple-type ::integer))
 
 (p/def-op expr/parse-expr numerical-constant
   [i (token ::lex/numerical-constant)]
@@ -37,6 +41,9 @@
 (defmethod expr/to-ir ::numerical-constant [c into]
   [[::ir/assign into (::value c)]])
 
+(defmethod expr/typecheck ::numerical-constant [c _]
+  (assoc c ::type/type (type/simple-type ::integer)))
+
 
 (p/def-op expr/parse-expr unary-minus
   {:precedence 4}
@@ -55,8 +62,12 @@
     (conj prev
           [::ir/assign into [::ir/negate tmp]]))) ; todo: unary minus instead negate
 
+(defmethod expr/typecheck ::unary-minus [n env]
+  (let [t (::type/type (expr/typecheck n env))]
+    (assoc n ::type/type t)))
 
-(defn- bin-op-node [op left right]
+
+(defn bin-op-node [op left right]
   {::ast/kind op
    ::ast/children [::left ::right]
    ::left left
@@ -73,6 +84,15 @@
     (conj (into [] (concat l-prev r-prev))
           [::ir/assign res [op l r]])))
 
+(defn- typecheck-bin-op [op env]
+  (let [ta (::type/type (expr/typecheck (::left op) env))
+        tb (::type/type (expr/typecheck (::right op) env))]
+    (if (= ta tb)
+      (assoc op ::type/type ta)
+      (assoc
+       (err/add-error op (err/make-semantic-error (str "type mismatch between " ta " and " tb)))
+       ::type/type type/error))))
+
 
 (p/def-op expr/parse-expr plus
   {:precedence 2 :associates :left}
@@ -84,6 +104,8 @@
 (defmethod ast/pretty-print ::plus [n] (pretty-print-binop n "+"))
 
 (defmethod expr/to-ir ::plus [n res] (to-ir-bin-op n res ::ir/plus))
+
+(defmethod expr/typecheck ::plus [p env] (typecheck-bin-op p env))
 
 
 (p/def-op expr/parse-expr minus
@@ -97,6 +119,8 @@
 
 (defmethod expr/to-ir ::minus [n res] (to-ir-bin-op n res ::ir/minus))
 
+(defmethod expr/typecheck ::minus [p env] (typecheck-bin-op p env))
+
 
 (p/def-op expr/parse-expr mul
   {:precedence 3 :associates :left}
@@ -109,6 +133,7 @@
 
 (defmethod expr/to-ir ::mul [n res] (to-ir-bin-op n res ::ir/mul))
 
+(defmethod expr/typecheck ::mul [p env] (typecheck-bin-op p env))
 
 (p/def-op expr/parse-expr div
   {:precedence 3 :associates :left}
@@ -121,6 +146,7 @@
 
 (defmethod expr/to-ir ::div [n res] (to-ir-bin-op n res ::ir/div))
 
+(defmethod expr/typecheck ::div [p env] (typecheck-bin-op p env))
 
 (p/def-op expr/parse-expr mod
   {:precedence 3 :associates :left}
@@ -132,3 +158,5 @@
 (defmethod ast/pretty-print ::mod [n] (pretty-print-binop n "%"))
 
 (defmethod expr/to-ir ::mod [n res] (to-ir-bin-op n res ::ir/mod))
+
+(defmethod expr/typecheck ::mod [p env] (typecheck-bin-op p env))
