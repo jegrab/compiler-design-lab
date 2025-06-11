@@ -217,6 +217,9 @@
     "|" (add-kind token ::bit-or)
     "&" (add-kind token ::bit-and)
     "^" (add-kind token ::bit-xor)
+    "|=" (add-kind token ::bit-or-assign)
+    "&=" (add-kind token ::bit-and-assign)
+    "^=" (add-kind token ::bit-xor-assign)
     (err/add-error token {::err/phase ::lexer
                           ::err/severity ::error
                           :msg (str "unknown operator " (::source-string token))})))
