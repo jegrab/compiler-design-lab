@@ -15,6 +15,38 @@
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
+(def ^:dynamic in-loop false)
+(def ^:dynamic dyn-label-start nil)
+(def ^:dynamic dyn-label-end nil)
+
+(p/defrule stmt/parse-statement ::break
+  [_ (token ::lex/break)]
+  {::ast/kind ::break
+   ::ast/children []})
+
+(defmethod ast/pretty-print ::break [_] "break;")
+(defmethod name/resolve-names-stmt ::break [break env] [break env])
+(defmethod stmt/typecheck ::break [break env] [break env])
+(defmethod ast/check-after-parse ::break [break]
+  (if (not in-loop)
+    (err/add-error break (err/make-semantic-error "break outside of loop"))
+    break))
+(defmethod stmt/to-ir ::break [_] [[::ir/goto dyn-label-end]])
+
+(p/defrule stmt/parse-statement ::continue
+  [_ (token ::lex/continue)]
+  {::ast/kind ::continue
+   ::ast/children []})
+
+(defmethod ast/pretty-print ::continue [_] "continue;")
+(defmethod name/resolve-names-stmt ::continue [continue env] [continue env])
+(defmethod stmt/typecheck ::continue [continue env] [continue env])
+(defmethod ast/check-after-parse ::continue [c]
+  (if (not in-loop)
+    (err/add-error c (err/make-semantic-error "continue outside of loop"))
+    c))
+(defmethod stmt/to-ir ::continue [_] [[::ir/goto dyn-label-start]])
+
 (defn while-node [test body]
   {::ast/kind ::while
    ::ast/children [::test ::body]
@@ -28,6 +60,12 @@
    _ (token ::lex/right-parentheses)
    body stmt/parse-statement]
   (while-node test body))
+
+(defmethod ast/check-after-parse ::while [while]
+  (binding [in-loop true]
+    (assoc while 
+           ::test (ast/check-after-parse (::test while))
+           ::body (ast/check-after-parse (::body while)))))
 
 (defmethod ast/pretty-print ::while [while]
   (str "while (" (ast/pretty-print (::test while)) ")\n{"
@@ -57,12 +95,15 @@
   (let [test-tmp (id/make-tmp)
         label-start (id/make-label "start")
         label-end (id/make-label "end")]
-    (into [] (concat
-              [[::ir/target label-start]]
-              (expr/to-ir (::test while) test-tmp)
-              [[::ir/if-false-jmp test-tmp label-end]]
-              (stmt/to-ir (::body while))
-              [[::ir/goto label-start]
-               [::ir/target label-end]]))))
+    (binding
+     [dyn-label-start label-start
+      dyn-label-end label-end]
+     (into [] (concat
+               [[::ir/target label-start]]
+               (expr/to-ir (::test while) test-tmp)
+               [[::ir/if-false-jmp test-tmp label-end]]
+               (stmt/to-ir (::body while))
+               [[::ir/goto label-start]
+                [::ir/target label-end]])))))
 
 (defmethod stmt/minimal-flow-paths ::while [block] [[]])
