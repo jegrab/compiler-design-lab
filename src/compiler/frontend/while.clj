@@ -20,7 +20,8 @@
 (def ^:dynamic dyn-label-end nil)
 
 (p/defrule stmt/parse-statement ::break
-  [_ (token ::lex/break)]
+  [_ (token ::lex/break)
+   _ (token ::lex/semicolon)]
   {::ast/kind ::break
    ::ast/children []})
 
@@ -34,7 +35,8 @@
 (defmethod stmt/to-ir ::break [_] [[::ir/goto dyn-label-end]])
 
 (p/defrule stmt/parse-statement ::continue
-  [_ (token ::lex/continue)]
+  [_ (token ::lex/continue)
+   _ (token ::lex/semicolon)]
   {::ast/kind ::continue
    ::ast/children []})
 
