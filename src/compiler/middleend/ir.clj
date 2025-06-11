@@ -26,10 +26,14 @@
 (defmulti get-res-var-name first)
 (defmethod get-res-var-name ::assign [[assign dest input]] dest)
 (defmethod get-res-var-name ::return [ret] nil)
+(defmethod get-res-var-name ::if-false-jmp [ret] nil)
+(defmethod get-res-var-name ::if-true-jmp [ret] nil)
+(defmethod get-res-var-name ::goto [ret] nil)
+(defmethod get-res-var-name ::target [ret] nil)
 
 (defn enumerate-vars [ir-vec]
   (let [var-set (into #{} (map get-res-var-name ir-vec))
-        with-nums (map (fn [var id][var id]) var-set (drop 1 (range)))]
+        with-nums (map (fn [var id] [var id]) var-set (drop 1 (range)))]
     (into {} with-nums)))
 
 (defmulti codegen (fn [instr var-ids] (first instr)))
@@ -39,35 +43,54 @@
 
 (defmethod codegen ::return [ret var-ids]
   [(str "movl " (read-stack (* 4 (var-ids ::ret-register)))  ", %eax")
-   "movslq %eax, %rdi"
-   "leave"
-   "ret"
+   "movslq %eax, %rdi #return"
+   "leave             #|"
+   "ret               #|"
    ""])
+
+(defmethod codegen ::target [[target label] var-ids]
+  [(str label ":")])
+
+(defmethod codegen ::goto [[goto label] var-ids]
+  [(str "jmp " label)])
+
+(defmethod codegen ::if-true-jmp [[if-true-jmp bool-to-test target] var-ids]
+  (let [source-offset (* 4 (var-ids bool-to-test))]
+    [(str "movl " (read-stack source-offset) ", %eax" " # if true jmp")
+     (str "cmp $0, %eax")
+     (str "jne " target)]))
+
+(defmethod codegen ::if-false-jmp [[if-true-jmp bool-to-test target] var-ids]
+  (let [source-offset (* 4 (var-ids bool-to-test))]
+    [(str "movl " (read-stack source-offset) ", %eax" " # if false jmp")
+     (str "cmp $0, %eax")
+     (str "je " target)]))
 
 (defmethod codegen ::assign [[assign dest input] var-ids]
 
   (let [dest-offset (* 4 (var-ids dest))]
     (cond
       (keyword? input)
-      [(str "movl " (read-stack (* 4 (var-ids input)))   " , %eax")
+      [(str "movl " (read-stack (* 4 (var-ids input)))   " , %eax" " # " dest " = " input)
        (str "movl %eax, " (read-stack dest-offset))]
 
       (integer? input)
-      [(str "movl " "$" input  " , " (read-stack dest-offset))]
+      [(str "movl " "$" input  " , " (read-stack dest-offset) " # " dest " = " input)]
 
       (and (vector? input)
            (= ::negate (first input)))
       (let [source-offset (* 4 (var-ids (second input)))]
-        [(str "movl " (read-stack source-offset) ", %eax")
+        [(str "movl " (read-stack source-offset) ", %eax" " # " dest " = -" input)
          "negl %eax"
          (str "movl %eax, " (read-stack dest-offset))])
 
       (and (vector? input)
-           (= ::negate (first input)))
+           (= ::not (first input)))
       (let [source-offset (* 4 (var-ids (second input)))]
-        [(str "movl " (read-stack source-offset) ", %eax")
-         "test %eax, %eax"
-         "setz %eax"
+        [(str "movl " (read-stack source-offset) ", %eax" " # " dest " = !" input)
+         "cmp $0, %eax"
+         "setz %al"
+         "movzbl %al, %eax"
          (str "movl %eax, " (read-stack dest-offset))])
 
       (and (vector? input)
@@ -99,7 +122,7 @@
          (str "idivl %ebx")
          (str "movl %edx, " (read-stack dest-offset))]))))
 
-(defn make-code [instrs] 
+(defn make-code [instrs]
   (let [num-vars (enumerate-vars instrs)
         asm-lines (apply concat (map #(codegen % num-vars) instrs))
         before start

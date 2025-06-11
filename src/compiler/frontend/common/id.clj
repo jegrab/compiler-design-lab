@@ -9,3 +9,9 @@
 (defn make-var []
   (swap! next-id inc)
   (keyword (str "var" @next-id)))
+
+(defn make-label
+  ([] (make-label ""))
+  ([name]
+   (swap! next-id inc)
+   (str "label_" name "_" @next-id)))

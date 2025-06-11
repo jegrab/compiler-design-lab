@@ -94,12 +94,17 @@
           [::ir/assign res [op l r]])))
 
 (defn- typecheck-bin-op [op env]
-  (let [ta (::type/type (expr/typecheck (::left op) env))
-        tb (::type/type (expr/typecheck (::right op) env))]
-    (if (= ta tb)
-      (assoc op ::type/type ta)
+  (let [ta  (expr/typecheck (::left op) env)
+        tb (expr/typecheck (::right op) env)]
+    (if (and (type/equals (::type/type ta) (::type/type tb))
+             (type/equals (::type/type ta) int-type)
+             (type/equals (::type/type tb) int-type))
+      (assoc op 
+             ::type/type int-type
+             ::left ta
+             ::right tb)
       (assoc
-       (err/add-error op (err/make-semantic-error (str "type mismatch between " ta " and " tb)))
+       (err/add-error op (err/make-semantic-error (str "type mismatch between " ta " and " tb " that should both be " int-type)))
        ::type/type type/error))))
 
 

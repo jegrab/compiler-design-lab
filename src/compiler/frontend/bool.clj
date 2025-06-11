@@ -67,3 +67,77 @@
     (conj prev [::ir/assign into [::ir/not tmp]])))
 
 
+(defn bin-op-node [op left right]
+  {::ast/kind op
+   ::ast/children [::left ::right]
+   ::left left
+   ::right right})
+
+(defn- pretty-print-binop [node op-str]
+  (str "(" (ast/pretty-print (::left node)) op-str (ast/pretty-print (::right node)) ")"))
+
+(defn- typecheck-bin-op [op env]
+  (let [ta (::type/type (expr/typecheck (::left op) env))
+        tb (::type/type (expr/typecheck (::right op) env))]
+    (if (and (type/equals ta tb)
+             (type/equals ta bool-type)
+             (type/equals tb bool-type))
+      (assoc op ::type/type bool-type)
+      (assoc
+       (err/add-error op (err/make-semantic-error (str "type mismatch between " ta " and " tb " that should both be " bool-type)))
+       ::type/type type/error))))
+
+(p/def-op expr/parse-expr and
+  {:precedence 4 :associates :left}
+  [left expr/parse-expr
+   _ (token ::lex/log-and)
+   right expr/parse-expr]
+  (bin-op-node ::and left right))
+
+(defmethod ast/pretty-print ::and [a] (pretty-print-binop a "&&"))
+
+(defmethod expr/typecheck ::and [a env] (typecheck-bin-op a env))
+
+(defmethod expr/to-ir ::and [a into]
+  (let [l (id/make-tmp)
+        r (id/make-tmp)
+        label-false (id/make-label "false")
+        label-end (id/make-label "end")]
+    (conj (into [] (concat
+                    (expr/to-ir (::left a) l)
+                    [[::ir/if-false-jmp l label-false]]
+                    (expr/to-ir (::right a) r)
+                    [[::ir/if-false-jmp l label-false]]
+                    [[::ir/assign into 1]
+                     [::ir/goto label-end]]
+                    [[::ir/target label-false]
+                     [::ir/assign into 0]]
+                    [[::ir/target label-end]])))))
+
+(p/def-op expr/parse-expr or
+  {:precedence 3 :associates :left}
+  [left expr/parse-expr
+   _ (token ::lex/log-or)
+   right expr/parse-expr]
+  (bin-op-node ::and left right))
+
+(defmethod ast/pretty-print ::or [a] (pretty-print-binop a "||"))
+
+(defmethod expr/typecheck ::or [a env] (typecheck-bin-op a env))
+
+(defmethod expr/to-ir ::or [a into]
+  (let [l (id/make-tmp)
+        r (id/make-tmp)
+        label-true (id/make-label "true")
+        label-end (id/make-label "end")]
+    (conj (into [] (concat
+                    (expr/to-ir (::left a) l)
+                    [[::ir/if-true-jmp l label-true]]
+                    (expr/to-ir (::right a) r)
+                    [[::ir/if-true-jmp l label-true]]
+                    [[::ir/assign into 0]
+                     [::ir/goto label-end]]
+                    [[::ir/target label-true]
+                     [::ir/assign into 1]]
+                    [[::ir/target label-end]])))))
+

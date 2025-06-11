@@ -76,13 +76,17 @@
   (and (char? char)
        (or (Character/isLetterOrDigit char) (= \_ char))))
 
-(defn- optional-trailing-assignment []
+(defn- optional-trailing-character []
   (fn [char state]
     (case state
       nil :first-char
-      :first-char (if (= \= char)
-                    :second-state
-                    nil)
+      :first-char (cond 
+                    (= \= char) :second-state
+                    (= \| char) :second-state
+                    (= \& char) :second-state
+                    (= \< char) :second-state
+                    (= \> char) :second-state
+                    :else nil)
       :second-state nil)))
 
 (defn- hex-char [char]
@@ -149,7 +153,7 @@
     nil? nil
     (one-of-pred "(){};") (make-one-char-token input ::separator)
     #(= % \=) (make-one-char-token input ::operator)
-    (one-of-pred "+-*/%!") (make-multi-char-token input ::operator (optional-trailing-assignment))
+    (one-of-pred "+-*/%!&|?:") (make-multi-char-token input ::operator (optional-trailing-character))
     #(= % \0) (assoc-in (make-multi-char-token input ::numerical-constant (starting-with-zero))
                         [0 ::num-kind] ::hex)
     (one-of-pred "123456789") (assoc-in
@@ -186,6 +190,10 @@
 (defmethod postprocess-token ::operator [token]
   (case (::source-string token)
     "!" (add-kind token ::log-not)
+    "&&" (add-kind token ::log-and)
+    "||" (add-kind token ::log-or)
+    "?" (add-kind token ::question-mark)
+    ":" (add-kind token ::colon)
     "=" (add-kind token ::assign)
     "+" (add-kind token ::plus)
     "+=" (add-kind token ::plus-assign)

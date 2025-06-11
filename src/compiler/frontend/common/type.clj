@@ -21,3 +21,14 @@
           
           :else 
           (= a b))))
+
+(defn common [a b]
+  (let [ka (::kind a)
+        kb (::kind b)]
+    (cond (= ka kb) a
+          (or (= ::error ka)
+              (= ::error kb)
+              (= ::unknown ka)
+              (= ::unknown kb))
+          unknown
+          :else error)))
