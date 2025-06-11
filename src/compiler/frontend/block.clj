@@ -9,12 +9,15 @@
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
+(defn block-node [stmts]
+  {::ast/kind ::block
+   ::ast/children [::stmts]
+   ::stmts stmts})
+
 (def parse-block (p/p-let [_ (token ::lex/left-brace)
                      stmts (p/many stmt/parse-statement)
                      _ (token ::lex/right-brace)] 
-                    {::ast/kind ::block
-                     ::ast/children [::stmts]
-                     ::stmts stmts}))
+                    (block-node stmts)))
 
 (p/defrule stmt/parse-statement ::block parse-block)
 

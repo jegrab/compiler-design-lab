@@ -20,9 +20,8 @@
 (p/defrule asnop-parser ::mod-assign [_ (token ::lex/mod-assign)] ::int/mod)
 
 
-(p/defrule stmt/parse-statement ::assnop
+(p/defrule stmt/parse-simp ::assnop
   [lv expr/parse-expr
    assnop asnop-parser
-   expr expr/parse-expr
-   _ (token ::lex/semicolon)]
+   expr expr/parse-expr]
   (var/assign-node lv (int/bin-op-node assnop lv expr)))

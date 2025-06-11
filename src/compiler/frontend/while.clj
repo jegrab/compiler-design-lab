@@ -15,16 +15,19 @@
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
+(defn while-node [test body]
+  {::ast/kind ::while
+   ::ast/children [::test ::body]
+   ::test test
+   ::body body})
+
 (p/defrule stmt/parse-statement ::while
   [_ (token ::lex/while)
    _ (token ::lex/left-parentheses)
    test expr/parse-expr
    _ (token ::lex/right-parentheses)
    body stmt/parse-statement]
-  {::ast/kind ::while
-   ::ast/children [::test ::body]
-   ::test test
-   ::body body})
+  (while-node test body))
 
 (defmethod ast/pretty-print ::while [while]
   (str "while (" (ast/pretty-print (::test while)) ")\n{"

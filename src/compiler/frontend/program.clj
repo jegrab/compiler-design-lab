@@ -12,6 +12,7 @@
             [compiler.frontend.if :as if]
             [compiler.frontend.intcomp :as intcomp]
             [compiler.frontend.while :as while]
+            [compiler.frontend.for :as for]
             [compiler.frontend.block :as block]
             [compiler.frontend.common.namespace :as name]
             [compiler.middleend.ir :as ir]

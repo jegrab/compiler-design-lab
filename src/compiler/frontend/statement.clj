@@ -6,10 +6,15 @@
             [compiler.frontend.expression :as expr]))
 
 (p/defmultiparser parse-statement)
+(p/defmultiparser parse-simp)
 
 (defn- token [kind]
   (fn [tok]
     (= (::lex/kind tok) kind)))
+
+(p/defrule parse-statement ::simple (p/p-let [s parse-simp
+                                              _ (token ::lex/semicolon)]
+                                             s))
 
 (defmulti typecheck (fn [stmt env] (::ast/kind stmt)))
 

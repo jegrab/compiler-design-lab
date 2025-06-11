@@ -48,13 +48,12 @@
   [[::ir/assign into (::id id)]])
 
 
-(p/defrule stmt/parse-statement ::declaration
+(p/defrule stmt/parse-simp ::declaration
   [type type/parse
    name (token ::lex/identifier)
    value (p/maybe (p/p-let [_ (token ::lex/assign)
                             e expr/parse-expr]
-                           e))
-   _ (token ::lex/semicolon)]
+                           e))]
   {::ast/kind ::declare
    ::ast/children [::value]
    ::type/type type
@@ -112,11 +111,10 @@
                (err/add-error lv (err/make-parser-error (str (ast/pretty-print lv) " is not an l-value"))))
    ::expr expr})
 
-(p/defrule stmt/parse-statement ::assignment
+(p/defrule stmt/parse-simp ::assignment
   [lv expr/parse-expr
    _ (token ::lex/assign)
-   expr expr/parse-expr
-   _ (token ::lex/semicolon)]
+   expr expr/parse-expr]
   (assign-node lv expr))
 
 (defmethod ast/pretty-print ::assign [assign]
