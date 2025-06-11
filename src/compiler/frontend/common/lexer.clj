@@ -211,6 +211,8 @@
     "<=" (add-kind token ::less-then-or-equal)
     ">" (add-kind token ::greater-then)
     ">=" (add-kind token ::greater-then-or-equal)
+    "<<" (add-kind token ::shift-left)
+    ">>" (add-kind token ::shift-right)
     (err/add-error token {::err/phase ::lexer
                           ::err/severity ::error
                           :msg (str "unknown operator " (::source-string token))})))

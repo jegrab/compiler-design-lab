@@ -6,7 +6,7 @@
    [compiler.frontend.common.parser :as p]
    [compiler.frontend.common.error :as err]
    [compiler.frontend.common.type :as type]
-   [compiler.frontend.expression :as expr] 
+   [compiler.frontend.expression :as expr]
    [compiler.middleend.ir :as ir]))
 
 (def int-type (type/simple-type ::integer))
@@ -99,7 +99,7 @@
     (if (and (type/equals (::type/type ta) (::type/type tb))
              (type/equals (::type/type ta) int-type)
              (type/equals (::type/type tb) int-type))
-      (assoc op 
+      (assoc op
              ::type/type int-type
              ::left ta
              ::right tb)
@@ -174,3 +174,30 @@
 (defmethod expr/to-ir ::mod [n res] (to-ir-bin-op n res ::ir/mod))
 
 (defmethod expr/typecheck ::mod [p env] (typecheck-bin-op p env))
+
+
+(p/def-op expr/parse-expr shift-left
+  {:precedence 10 :associates :left}
+  [left expr/parse-expr
+   _ (token ::lex/shift-left)
+   right expr/parse-expr]
+  (bin-op-node ::shift-left left right))
+
+(defmethod ast/pretty-print ::shift-left [n] (pretty-print-binop n "<<"))
+
+(defmethod expr/to-ir ::shift-left [n res] (to-ir-bin-op n res ::ir/shift-left))
+
+(defmethod expr/typecheck ::shift-left [p env] (typecheck-bin-op p env))
+
+(p/def-op expr/parse-expr shift-right
+  {:precedence 10 :associates :left}
+  [left expr/parse-expr
+   _ (token ::lex/shift-right)
+   right expr/parse-expr]
+  (bin-op-node ::shift-right left right))
+
+(defmethod ast/pretty-print ::shift-right [n] (pretty-print-binop n "<<"))
+
+(defmethod expr/to-ir ::shift-right [n res] (to-ir-bin-op n res ::ir/shift-right))
+
+(defmethod expr/typecheck ::shift-right [p env] (typecheck-bin-op p env))
