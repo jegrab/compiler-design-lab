@@ -139,12 +139,12 @@
          (str "movl %eax, " (read-stack dest-offset))])
 
       (and (vector? input)
-           (#{::plus ::minus ::mul ::log-and ::log-or ::log-xor} (first input)))
+           (#{::plus ::minus ::mul ::bit-and ::bit-or ::bit-xor} (first input)))
       (let [left-offset (* 4 (var-ids (nth input 1)))
             right-offset (* 4 (var-ids (nth input 2)))]
         [(str "movl " (read-stack left-offset) ", %eax")
          (str "movl " (read-stack right-offset) ", %ebx")
-         (str ({::plus "addl" ::minus "subl" ::mul "imull" ::log-and "andl" ::log-or "orl" ::log-xor "xorl"} 
+         (str ({::plus "addl" ::minus "subl" ::mul "imull" ::bit-and "andl" ::bit-or "orl" ::bit-xor "xorl"} 
                (first input)) " " "%ebx, %eax")
          (str "movl %eax, " (read-stack dest-offset))]) 
 
