@@ -204,7 +204,10 @@
     "/" (add-kind token ::div)
     "/=" (add-kind token ::div-assign)
     "%" (add-kind token ::mod)
-    "%=" (add-kind token ::mod-assign)))
+    "%=" (add-kind token ::mod-assign)
+    (err/add-error token {::err/phase ::lexer
+                          ::err/severity ::error
+                          :msg (str "unknown operator " (::source-string token))})))
 
 (defmethod postprocess-token ::numerical-constant [token]
   (let [error {::err/phase ::lexer
