@@ -153,7 +153,7 @@
     nil? nil
     (one-of-pred "(){};") (make-one-char-token input ::separator)
     ;#(= % \=) (make-one-char-token input ::operator)
-    (one-of-pred "+-*/%!&|?:=<>") (make-multi-char-token input ::operator (optional-trailing-character))
+    (one-of-pred "+-*/%!&|?:=<>~^") (make-multi-char-token input ::operator (optional-trailing-character))
     #(= % \0) (assoc-in (make-multi-char-token input ::numerical-constant (starting-with-zero))
                         [0 ::num-kind] ::hex)
     (one-of-pred "123456789") (assoc-in
@@ -213,6 +213,10 @@
     ">=" (add-kind token ::greater-then-or-equal)
     "<<" (add-kind token ::shift-left)
     ">>" (add-kind token ::shift-right)
+    "~" (add-kind token ::bit-not)
+    "|" (add-kind token ::bit-or)
+    "&" (add-kind token ::bit-and)
+    "^" (add-kind token ::bit-xor)
     (err/add-error token {::err/phase ::lexer
                           ::err/severity ::error
                           :msg (str "unknown operator " (::source-string token))})))

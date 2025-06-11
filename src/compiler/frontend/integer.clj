@@ -201,3 +201,76 @@
 (defmethod expr/to-ir ::shift-right [n res] (to-ir-bin-op n res ::ir/shift-right))
 
 (defmethod expr/typecheck ::shift-right [p env] (typecheck-bin-op p env))
+
+
+(p/def-op expr/parse-expr bitwise-not
+  {:precedence 13}
+  [_ (token ::lex/bit-not)
+   e expr/parse-expr]
+  {::ast/kind ::bit-not
+   ::ast/children [::child]
+   ::child e})
+
+(defmethod ast/pretty-print ::bit-not [n]
+  (str "(~" (ast/pretty-print (::child n)) ")"))
+
+(defmethod expr/to-ir ::bit-not [n into]
+  (let [tmp (id/make-tmp)
+        prev (expr/to-ir (::child n) tmp)]
+    (conj prev
+          [::ir/assign into [::ir/bit-not tmp]])))
+
+(defmethod expr/typecheck ::bit-not [n env]
+  (let [new-c (expr/typecheck (::child n) env)
+        t (::type/type new-c)
+        new-n (assoc n
+                     ::type/type int-type
+                     ::child new-c)]
+    (if (type/equals t int-type)
+      new-n
+      (err/add-error new-n
+                     (err/make-semantic-error (str "type mismatch: bitwise not requires int but got " t))))))
+
+
+(p/def-op expr/parse-expr bit-and
+  {:precedence 7 :associates :left}
+  [left expr/parse-expr
+   _ (token ::lex/bit-and)
+   right expr/parse-expr]
+  (bin-op-node ::bit-and left right))
+
+(defmethod ast/pretty-print ::bit-and [n] (pretty-print-binop n "&"))
+
+(defmethod expr/to-ir ::bit-and [n res] (to-ir-bin-op n res ::ir/bit-and))
+
+(defmethod expr/typecheck ::bit-and [p env] (typecheck-bin-op p env))
+
+
+
+(p/def-op expr/parse-expr bit-xor
+  {:precedence 6 :associates :left}
+  [left expr/parse-expr
+   _ (token ::lex/bit-xor)
+   right expr/parse-expr]
+  (bin-op-node ::bit-xor left right))
+
+(defmethod ast/pretty-print ::bit-xor [n] (pretty-print-binop n "^"))
+
+(defmethod expr/to-ir ::bit-xor [n res] (to-ir-bin-op n res ::ir/bit-xor))
+
+(defmethod expr/typecheck ::bit-xor [p env] (typecheck-bin-op p env))
+
+
+
+(p/def-op expr/parse-expr bit-or
+  {:precedence 5 :associates :left}
+  [left expr/parse-expr
+   _ (token ::lex/bit-or)
+   right expr/parse-expr]
+  (bin-op-node ::bit-or left right))
+
+(defmethod ast/pretty-print ::bit-or [n] (pretty-print-binop n "|"))
+
+(defmethod expr/to-ir ::bit-or [n res] (to-ir-bin-op n res ::ir/bit-or))
+
+(defmethod expr/typecheck ::bit-or [p env] (typecheck-bin-op p env))
