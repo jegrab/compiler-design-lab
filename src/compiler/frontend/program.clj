@@ -49,7 +49,7 @@
         new-ret (assoc ret ::ret-expr new-expr)]
     [(if (type/equals decl-type actual-type)
        new-ret
-       (err/add-error new-ret (str "type mismatch. should return " decl-type " but returns " actual-type)))
+       (err/add-error new-ret (err/make-semantic-error (str "type mismatch. should return " decl-type " but returns " actual-type))))
      env]))
 
 (defmethod stmt/minimal-flow-paths ::return [ret]
