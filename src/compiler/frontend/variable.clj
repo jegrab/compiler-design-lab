@@ -97,6 +97,9 @@
                    (err/add-error decl (err/make-semantic-error (str "type mismatch. declared: " type " actual: " (::type/type new-val)))))]
     [new-decl new-env]))
 
+(defmethod stmt/minimal-flow-paths ::declare [decl]
+  [[decl]])
+
 (defmulti is-l-value ::ast/kind)
 (defmethod is-l-value :default [_] false)
 (defmethod is-l-value ::identifier [_] true)
@@ -146,3 +149,6 @@
                      assign
                      (err/add-error assign (err/make-semantic-error (str "type mismatch. left: " (::type/type new-l-v) " right: " (::type/type new-expr)))))]
     [new-assign env]))
+
+(defmethod stmt/minimal-flow-paths ::assign [assign]
+  [[assign]])

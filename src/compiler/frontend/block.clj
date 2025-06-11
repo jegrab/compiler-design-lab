@@ -58,3 +58,16 @@
        (rest stmts)
        (into [] (concat res (stmt/to-ir (first stmts))))))))
 
+(defn- add-all-path-combs [first second]
+  (for [f first
+        s second]
+    (into f s)))
+
+(defmethod stmt/minimal-flow-paths ::block [block]
+  (loop [stmts (::stmts block)
+         res [[]]]
+    (if (empty? stmts)
+      res
+      (recur 
+       (rest stmts)
+       (add-all-path-combs res (stmt/minimal-flow-paths (first stmts)))))))

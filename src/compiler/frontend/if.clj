@@ -79,3 +79,9 @@
                 (stmt/to-ir (::else if))
                 [])
               [[::ir/target label-end]]))))
+
+(defmethod stmt/minimal-flow-paths ::if [if]
+  (if (::else if)
+    (into (stmt/minimal-flow-paths (::then if))
+          (stmt/minimal-flow-paths (::else if)))
+    [[]]))

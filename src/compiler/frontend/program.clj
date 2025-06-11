@@ -1,8 +1,8 @@
-(ns compiler.frontend.program 
+(ns compiler.frontend.program
   (:require [compiler.frontend.common.ast :as ast]
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.parser :as p]
-            [compiler.frontend.statement :as stmt] 
+            [compiler.frontend.statement :as stmt]
             [compiler.frontend.expression :as expr]
             [compiler.frontend.variable :as var]
             [compiler.frontend.integer :as int]
@@ -34,7 +34,7 @@
 
 (defmethod name/resolve-names-stmt ::return [ret env]
   [(assoc ret
-          ::ret-expr (name/resolve-names-expr (::ret-expr ret) env)) 
+          ::ret-expr (name/resolve-names-expr (::ret-expr ret) env))
    env])
 
 (defmethod stmt/to-ir ::return [ret]
@@ -49,8 +49,11 @@
         new-ret (assoc ret ::ret-expr new-expr)]
     [(if (type/equals decl-type actual-type)
        new-ret
-       (err/add-error new-ret (str "type mismatch. should return " decl-type " but returns " actual-type))) 
+       (err/add-error new-ret (str "type mismatch. should return " decl-type " but returns " actual-type)))
      env]))
+
+(defmethod stmt/minimal-flow-paths ::return [ret]
+  [[ret]])
 
 (defmulti is-return ::ast/kind)
 (defmethod is-return ::return [_] true)
@@ -71,45 +74,47 @@
     ::body body
     ::ret-type int/int-type}))
 
+(defn take-throughv
+  "like take while, but also includes the first element where the predicate does not hold"
+  [pred coll]
+  (loop [coll coll
+         res []]
+    (cond
+      (empty? coll) res
+      (pred (first coll)) (recur (rest coll)
+                                 (conj res (first coll)))
+      :else (conj res (first coll)))))
+
+
 (defn build-ast [source-str]
   (let [tokens (lex/lex source-str)
         prog (p/run program-parser tokens)
         ret-type (::ret-type prog)]
     ;(println "source str: " source-str)
-    (println "tokens: " (map ::lex/kind tokens))
+    ;(println "tokens: " (map ::lex/kind tokens))
     (cond
       (some err/has-error? tokens)
       {::code nil
        ::errors #{(err/make-parser-error "illegal token detected")}}
 
       (::p/success prog)
-      (let [analysed (loop [env (assoc var/default-env
-                                       ::ret-type int/int-type)
-                            to-do (::block/stmts (::body (::p/value prog)))
-                            done []
-                            has-return false]
-                       (if (empty? to-do)
-                         {::code done
-                          ::errors (if-not has-return
-                                     #{(err/make-semantic-error "missing return statement")}
-                                     nil)}
-                         (let [[stmt new-env] (name/resolve-names-stmt (ast/check-after-parse (first to-do)) env)
-                               [stmt new-env] (stmt/typecheck stmt new-env)]
-                           (recur new-env
-                                  (rest to-do)
-                                  (conj done stmt)
-                                  (or has-return (is-return stmt))))))]
-        analysed)
+      (let [env (assoc var/default-env ::ret-type int/int-type)
+            body (::body (::p/value prog))
+            body (ast/check-after-parse body)
+            [body env] (name/resolve-names-stmt body env)
+            [body env] (stmt/typecheck body env)
+            flows (stmt/minimal-flow-paths body)
+            all-flows-contain-return (every? #(some is-return %) flows)
+            flows-up-to-return (map #(take-throughv (comp not is-return) %) flows)]
+        (println "flows-to-return: " (map #(mapv ast/pretty-print %) flows-up-to-return)) 
+        {::code body
+         ::errors (if-not all-flows-contain-return
+                    #{(err/make-semantic-error "missing return statement")}
+                    nil)})
 
       :else
       {::code nil
        ::errors #{(err/make-parser-error "unknown fatal parser error")}})))
 
-(defn to-ir [ast-seq]
-  (loop [asts ast-seq
-         res []]
-    (if (empty? asts)
-      res
-      (recur 
-       (rest asts)
-       (into [] (concat res (stmt/to-ir (first asts))))))))
+(defn to-ir [ast]
+  (stmt/to-ir ast))
