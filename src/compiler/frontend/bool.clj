@@ -107,7 +107,7 @@
               (expr/to-ir (::left a) l)
               [[::ir/if-false-jmp l label-false]]
               (expr/to-ir (::right a) r)
-              [[::ir/if-false-jmp l label-false]]
+              [[::ir/if-false-jmp r label-false]]
               [[::ir/assign res 1]
                [::ir/goto label-end]]
               [[::ir/target label-false]
@@ -134,7 +134,7 @@
               (expr/to-ir (::left a) l)
               [[::ir/if-true-jmp l label-true]]
               (expr/to-ir (::right a) r)
-              [[::ir/if-true-jmp l label-true]]
+              [[::ir/if-true-jmp r label-true]]
               [[::ir/assign res 0]
                [::ir/goto label-end]]
               [[::ir/target label-true]
