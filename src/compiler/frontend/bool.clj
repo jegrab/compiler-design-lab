@@ -119,7 +119,7 @@
   [left expr/parse-expr
    _ (token ::lex/log-or)
    right expr/parse-expr]
-  (bin-op-node ::and left right))
+  (bin-op-node ::or left right))
 
 (defmethod ast/pretty-print ::or [a] (pretty-print-binop a "||"))
 
