@@ -65,6 +65,27 @@
      (str "cmp $0, %eax")
      (str "je " target)]))
 
+(defmethod codegen ::if-equal-jmp [[if-eq-jmp a b target] var-ids]
+  (let [a (* 4 (var-ids a))
+        b (* 4 (var-ids b))]
+    [(str "movl " (read-stack a) ", %eax " " # if eq jmp")
+     (str "cmp " "%eax" ", " (read-stack b) )
+     (str "je " target)]))
+
+(defmethod codegen ::if-greater-jmp [[if-eq-jmp a b target] var-ids]
+  (let [a (* 4 (var-ids a))
+        b (* 4 (var-ids b))]
+    [(str "movl " (read-stack b) ", %eax " " # if gt jmp")
+     (str "cmp " "%eax" ", " (read-stack a))
+     (str "jg " target)]))
+
+(defmethod codegen ::if-greater-or-equal-jmp [[if-eq-jmp a b target] var-ids]
+  (let [a (* 4 (var-ids a))
+        b (* 4 (var-ids b))]
+    [(str "movl " (read-stack b) ", %eax " " # if geq jmp")
+     (str "cmp " "%eax" ", " (read-stack a))
+     (str "jge " target)]))
+
 (defmethod codegen ::assign [[assign dest input] var-ids]
 
   (let [dest-offset (* 4 (var-ids dest))]

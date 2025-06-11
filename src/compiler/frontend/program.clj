@@ -10,6 +10,7 @@
             [compiler.frontend.intasnop :as intasnop]
             [compiler.frontend.ternary :as ternary]
             [compiler.frontend.if :as if]
+            [compiler.frontend.intcomp :as intcomp]
             [compiler.frontend.block :as block]
             [compiler.frontend.common.namespace :as name]
             [compiler.middleend.ir :as ir]
@@ -75,7 +76,7 @@
         prog (p/run program-parser tokens)
         ret-type (::ret-type prog)]
     ;(println "source str: " source-str)
-    ;(println "tokens: " (map ::lex/kind tokens))
+    (println "tokens: " (map ::lex/kind tokens))
     (cond
       (some err/has-error? tokens)
       {::code nil

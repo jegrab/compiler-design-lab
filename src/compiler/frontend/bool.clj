@@ -76,16 +76,20 @@
 (defn- pretty-print-binop [node op-str]
   (str "(" (ast/pretty-print (::left node)) op-str (ast/pretty-print (::right node)) ")"))
 
-(defn- typecheck-bin-op [op env]
-  (let [ta (::type/type (expr/typecheck (::left op) env))
-        tb (::type/type (expr/typecheck (::right op) env))]
+(defn- typecheck-bin-op-all-bool [op env]
+  (let [left (expr/typecheck (::left op) env)
+        right (expr/typecheck (::right op) env)
+        ta (::type/type left)
+        tb (::type/type right)
+        op (assoc op
+                  ::type/type bool-type
+                  ::left left
+                  ::right right)]
     (if (and (type/equals ta tb)
              (type/equals ta bool-type)
              (type/equals tb bool-type))
-      (assoc op ::type/type bool-type)
-      (assoc
-       (err/add-error op (err/make-semantic-error (str "type mismatch between " ta " and " tb " that should both be " bool-type)))
-       ::type/type type/error))))
+      op
+      (err/add-error op (err/make-semantic-error (str "type mismatch between " left " and " right " that should both be " bool-type))))))
 
 (p/def-op expr/parse-expr and
   {:precedence 4 :associates :left}
@@ -96,7 +100,7 @@
 
 (defmethod ast/pretty-print ::and [a] (pretty-print-binop a "&&"))
 
-(defmethod expr/typecheck ::and [a env] (typecheck-bin-op a env))
+(defmethod expr/typecheck ::and [a env] (typecheck-bin-op-all-bool a env))
 
 (defmethod expr/to-ir ::and [a res]
   (let [l (id/make-tmp)
@@ -123,7 +127,7 @@
 
 (defmethod ast/pretty-print ::or [a] (pretty-print-binop a "||"))
 
-(defmethod expr/typecheck ::or [a env] (typecheck-bin-op a env))
+(defmethod expr/typecheck ::or [a env] (typecheck-bin-op-all-bool a env))
 
 (defmethod expr/to-ir ::or [a res]
   (let [l (id/make-tmp)
@@ -141,3 +145,68 @@
                [::ir/assign res 1]]
               [[::ir/target label-end]]))))
 
+(defn- typecheck-bin-op-poylmorphic [op env]
+  (let [left (expr/typecheck (::left op) env)
+        right (expr/typecheck (::right op) env)
+        ta (::type/type left)
+        tb (::type/type right)
+        op (assoc op
+                  ::type/type bool-type
+                  ::left left
+                  ::right right)]
+    (if (type/equals ta tb)
+      op
+      (err/add-error op (err/make-semantic-error (str "type mismatch between " left " and " right " that should be equal"))))))
+
+(p/def-op expr/parse-expr equal
+  {:precedence 8 :associates :left}
+  [l expr/parse-expr
+   _ (token ::lex/equal)
+   r expr/parse-expr]
+  (bin-op-node ::equal l r))
+
+(defmethod ast/pretty-print ::equal [e] (pretty-print-binop e "=="))
+
+(defmethod expr/typecheck ::equal [e env] (typecheck-bin-op-poylmorphic e env))
+
+(defmethod expr/to-ir ::equal [e res]
+  (let [l (id/make-tmp)
+        r (id/make-tmp)
+        label-eq (id/make-label "eq")
+        label-end (id/make-label "end")]
+    (into [] (concat 
+              (expr/to-ir (::left e) l)
+              (expr/to-ir (::right e) r)
+              [[::ir/if-equal-jmp l r label-eq]
+               [::ir/assign res 0] ; not equal -> res is false
+               [::ir/goto label-end]
+               [::ir/target label-eq]
+               [::ir/assign res 1] ; equal -> res is true
+               [::ir/target label-end]]))))
+
+
+(p/def-op expr/parse-expr not-equal
+  {:precedence 8 :associates :left}
+  [l expr/parse-expr
+   _ (token ::lex/not-equal)
+   r expr/parse-expr]
+  (bin-op-node ::not-equal l r))
+
+(defmethod ast/pretty-print ::not-equal [e] (pretty-print-binop e "!="))
+
+(defmethod expr/typecheck ::not-equal [e env] (typecheck-bin-op-poylmorphic e env))
+
+(defmethod expr/to-ir ::not-equal [e res]
+  (let [l (id/make-tmp)
+        r (id/make-tmp)
+        label-eq (id/make-label "eq")
+        label-end (id/make-label "end")]
+    (into [] (concat
+              (expr/to-ir (::left e) l)
+              (expr/to-ir (::right e) r)
+              [[::ir/if-equal-jmp l r label-eq]
+               [::ir/assign res 1] ; not equal -> res is true
+               [::ir/goto label-end]
+               [::ir/target label-eq]
+               [::ir/assign res 0] ; equal -> res is false
+               [::ir/target label-end]]))))
