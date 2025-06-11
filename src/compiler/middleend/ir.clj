@@ -25,11 +25,7 @@
 
 (defmulti get-res-var-name first)
 (defmethod get-res-var-name ::assign [[assign dest input]] dest)
-(defmethod get-res-var-name ::return [ret] nil)
-(defmethod get-res-var-name ::if-false-jmp [ret] nil)
-(defmethod get-res-var-name ::if-true-jmp [ret] nil)
-(defmethod get-res-var-name ::goto [ret] nil)
-(defmethod get-res-var-name ::target [ret] nil)
+(defmethod get-res-var-name :default [_] nil)
 
 (defn enumerate-vars [ir-vec]
   (let [var-set (into #{} (map get-res-var-name ir-vec))
@@ -47,6 +43,9 @@
    "leave             #|"
    "ret               #|"
    ""])
+
+(defmethod codegen ::nop [[nop] var-ids]
+  [(str "nop")])
 
 (defmethod codegen ::target [[target label] var-ids]
   [(str label ":")])
@@ -129,6 +128,6 @@
         make-stack ["pushq %rbp"
                     "movq %rsp, %rbp"
                     (str "subq $" (* 4 (count (enumerate-vars instrs))) ", %rsp")]
-        after []
+        after ["\n"]
         whole (concat before make-stack asm-lines after)]
     (clojure.string/join "\n" whole)))
