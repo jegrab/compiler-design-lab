@@ -49,15 +49,16 @@
             t)]
     t))
 
-(defmethod expr/to-ir ::ternary [t into]
+(defmethod expr/to-ir ::ternary [t res]
   (let [test-tmp (id/make-tmp)
         label-else (id/make-label "else")
         label-end (id/make-label "end")]
-    (conj (into [] (concat
-                    (expr/to-ir (::test t) test-tmp)
-                    [[::ir/if-false-jmp test-tmp label-else]]
-                    (expr/to-ir (::then t) into)
-                    [[::ir/goto label-end]]
-                    [[::ir/target label-else]]
-                    (expr/to-ir (::else t) into) 
-                    [[::ir/target label-end]])))))
+    (into [] (concat
+              (expr/to-ir (::test t) test-tmp)
+              [[::ir/if-false-jmp test-tmp label-else]]
+              (expr/to-ir (::then t) res)
+              [[::ir/goto label-end]]
+              [[::ir/target label-else]]
+              (expr/to-ir (::else t) res)
+              [[::ir/target label-end]
+               [::ir/nop]]))))

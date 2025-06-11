@@ -61,10 +61,10 @@
       (err/add-error new-n
                      (err/make-semantic-error (str "type mismatch: unary negation requires bool but got " t))))))
 
-(defmethod expr/to-ir ::boolean-negation [n into]
+(defmethod expr/to-ir ::boolean-negation [n res]
   (let [tmp (id/make-tmp)
         prev (expr/to-ir (::child n) tmp)]
-    (conj prev [::ir/assign into [::ir/not tmp]])))
+    (conj prev [::ir/assign res [::ir/not tmp]])))
 
 
 (defn bin-op-node [op left right]
@@ -98,21 +98,21 @@
 
 (defmethod expr/typecheck ::and [a env] (typecheck-bin-op a env))
 
-(defmethod expr/to-ir ::and [a into]
+(defmethod expr/to-ir ::and [a res]
   (let [l (id/make-tmp)
         r (id/make-tmp)
         label-false (id/make-label "false")
         label-end (id/make-label "end")]
-    (conj (into [] (concat
-                    (expr/to-ir (::left a) l)
-                    [[::ir/if-false-jmp l label-false]]
-                    (expr/to-ir (::right a) r)
-                    [[::ir/if-false-jmp l label-false]]
-                    [[::ir/assign into 1]
-                     [::ir/goto label-end]]
-                    [[::ir/target label-false]
-                     [::ir/assign into 0]]
-                    [[::ir/target label-end]])))))
+    (into [] (concat
+              (expr/to-ir (::left a) l)
+              [[::ir/if-false-jmp l label-false]]
+              (expr/to-ir (::right a) r)
+              [[::ir/if-false-jmp l label-false]]
+              [[::ir/assign res 1]
+               [::ir/goto label-end]]
+              [[::ir/target label-false]
+               [::ir/assign res 0]]
+              [[::ir/target label-end]]))))
 
 (p/def-op expr/parse-expr or
   {:precedence 3 :associates :left}
@@ -125,19 +125,19 @@
 
 (defmethod expr/typecheck ::or [a env] (typecheck-bin-op a env))
 
-(defmethod expr/to-ir ::or [a into]
+(defmethod expr/to-ir ::or [a res]
   (let [l (id/make-tmp)
         r (id/make-tmp)
         label-true (id/make-label "true")
         label-end (id/make-label "end")]
-    (conj (into [] (concat
-                    (expr/to-ir (::left a) l)
-                    [[::ir/if-true-jmp l label-true]]
-                    (expr/to-ir (::right a) r)
-                    [[::ir/if-true-jmp l label-true]]
-                    [[::ir/assign into 0]
-                     [::ir/goto label-end]]
-                    [[::ir/target label-true]
-                     [::ir/assign into 1]]
-                    [[::ir/target label-end]])))))
+    (into [] (concat
+              (expr/to-ir (::left a) l)
+              [[::ir/if-true-jmp l label-true]]
+              (expr/to-ir (::right a) r)
+              [[::ir/if-true-jmp l label-true]]
+              [[::ir/assign res 0]
+               [::ir/goto label-end]]
+              [[::ir/target label-true]
+               [::ir/assign res 1]]
+              [[::ir/target label-end]]))))
 
