@@ -9,6 +9,7 @@
             [compiler.frontend.bool :as bool]
             [compiler.frontend.intasnop :as intasnop]
             [compiler.frontend.ternary :as ternary]
+            [compiler.frontend.if :as if]
             [compiler.frontend.block :as block]
             [compiler.frontend.common.namespace :as name]
             [compiler.middleend.ir :as ir]
