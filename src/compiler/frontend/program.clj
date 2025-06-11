@@ -108,7 +108,7 @@
             flows (stmt/minimal-flow-paths body)
             all-flows-contain-return (every? #(some is-return %) flows)
             flows-up-to-return (map #(take-throughv (comp not is-return) %) flows)]
-        (println "flows-to-return: " (map #(mapv ast/pretty-print %) flows-up-to-return)) 
+        ;(println "flows-to-return: " (map #(mapv ast/pretty-print %) flows-up-to-return)) 
         {::code body
          ::errors (if-not all-flows-contain-return
                     #{(err/make-semantic-error "missing return statement")}

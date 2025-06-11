@@ -81,28 +81,28 @@
        "}\n"))
 
 (defmethod name/resolve-names-stmt ::for [for env]
-  (let [[init new-env] (if (::init for) (name/resolve-names-stmt (::init for) env) (::init for))
+  (let [[init new-env] (if (::init for) (name/resolve-names-stmt (::init for) env) [(::init for) env])
         test (name/resolve-names-expr (::test for) new-env)
-        [step new-env] (if (::step for) (name/resolve-names-stmt (::step for) new-env) (::step for))
+        [step new-env] (if (::step for) (name/resolve-names-stmt (::step for) new-env) [(::step for) new-env])
         [body _] (name/resolve-names-stmt (::body for) new-env)
         for (assoc for
-                     ::init init
-                     ::test test
-                     ::step step
-                     ::body body)]
+                   ::init init
+                   ::test test
+                   ::step step
+                   ::body body)]
     [for env]))
 
 (defmethod stmt/typecheck ::for [for env]
-  (let [[init new-env] (if (::init for) (stmt/typecheck (::init for) env) (::init for))
+  (let [[init new-env] (if (::init for) (stmt/typecheck (::init for) env) [(::init for) env])
         test (expr/typecheck (::test for) new-env)
-        [step new-env] (if (::step for) (stmt/typecheck (::step for) new-env) (::step for))
+        [step new-env] (if (::step for) (stmt/typecheck (::step for) new-env) [(::step for) new-env])
         [body _] (stmt/typecheck (::body for) new-env)
         for (assoc for
-                     ::test test
-                     ::body body)
+                   ::test test
+                   ::body body)
         for (if (type/equals (::type/type test) bool/bool-type)
-                for
-                (err/add-error for (err/make-semantic-error (str "type mismatch. Test in loop has type " (::type/type test) " but should have type bool."))))]
+              for
+              (err/add-error for (err/make-semantic-error (str "type mismatch. Test in loop has type " (::type/type test) " but should have type bool."))))]
     [for env]))
 
 (defmethod stmt/to-ir ::for [for]
@@ -114,13 +114,13 @@
      [dyn-label-cont label-cont
       dyn-label-end label-end]
       (into [] (concat
-                (stmt/to-ir (::init for))
+                (if (::init for) (stmt/to-ir (::init for)) [])
                 [[::ir/target label-start]]
                 (expr/to-ir (::test for) test-tmp)
                 [[::ir/if-false-jmp test-tmp label-end]]
                 (stmt/to-ir (::body for))
                 [[::ir/target label-cont]]
-                (stmt/to-ir (::step for))
+                (if (::step for) (stmt/to-ir (::step for)) [])
                 [[::ir/goto label-start]
                  [::ir/target label-end]])))))
 
