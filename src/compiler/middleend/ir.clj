@@ -121,12 +121,30 @@
          (str "movl %eax, " (read-stack dest-offset))])
 
       (and (vector? input)
-           (#{::plus ::minus ::mul ::shift-left ::shift-right ::log-and ::log-or ::log-xor} (first input)))
+           (= ::shift-left (first input)))
+      (let [left-offset (* 4 (var-ids (nth input 1)))
+            right-offset (* 4 (var-ids (nth input 2)))]
+        [(str "movl " (read-stack left-offset) ", %eax")
+         (str "movl " (read-stack right-offset) ", %ecx")
+         (str "sall %cl, %eax")
+         (str "movl %eax, " (read-stack dest-offset))])
+
+      (and (vector? input)
+           (= ::shift-right(first input)))
+      (let [left-offset (* 4 (var-ids (nth input 1)))
+            right-offset (* 4 (var-ids (nth input 2)))]
+        [(str "movl " (read-stack left-offset) ", %eax")
+         (str "movl " (read-stack right-offset) ", %ecx")
+         (str "sarl %cl, %eax")
+         (str "movl %eax, " (read-stack dest-offset))])
+
+      (and (vector? input)
+           (#{::plus ::minus ::mul ::log-and ::log-or ::log-xor} (first input)))
       (let [left-offset (* 4 (var-ids (nth input 1)))
             right-offset (* 4 (var-ids (nth input 2)))]
         [(str "movl " (read-stack left-offset) ", %eax")
          (str "movl " (read-stack right-offset) ", %ebx")
-         (str ({::plus "addl" ::minus "subl" ::mul "imull" ::shift-left "sall" ::shift-right "sarl" ::log-and "andl" ::log-or "orl" ::log-xor "xorl"} 
+         (str ({::plus "addl" ::minus "subl" ::mul "imull" ::log-and "andl" ::log-or "orl" ::log-xor "xorl"} 
                (first input)) " " "%ebx, %eax")
          (str "movl %eax, " (read-stack dest-offset))]) 
 
