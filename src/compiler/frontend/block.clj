@@ -1,5 +1,6 @@
 (ns compiler.frontend.block
-  (:require [compiler.frontend.common.ast :as ast]
+  (:require [clojure.string :as str]
+            [compiler.frontend.common.ast :as ast]
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.parser :as p]
             [compiler.frontend.statement :as stmt]
@@ -22,7 +23,7 @@
 (p/defrule stmt/parse-statement ::block parse-block)
 
 (defmethod ast/pretty-print ::block [block]
-  (str "{\n" (apply concat (map ast/pretty-print (::stmts block))) "}\n"))
+  (str "{\n" (str/join "\n" (map ast/pretty-print (::stmts block))) "\n}\n"))
 
 (defmethod name/resolve-names-stmt ::block [block env]
   (let [new-stmts (loop [old-stmts (::stmts block)
