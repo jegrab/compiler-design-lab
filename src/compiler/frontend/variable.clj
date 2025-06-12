@@ -117,8 +117,13 @@
 
 (defmethod check-initialization ::declare [decl env]
   (if (::value decl)
-    (assoc env
-           ::initialized (conj (::initialized env) (::id decl)))
+    (let [errors (for [used (used-vars (::value decl))
+                       :when (not ((::initialized env) (::id used)))]
+                   (err/make-semantic-error (str "accessing uninitialized variable " (::name used))))
+          env (assoc env ::errors (into (:errors env) errors))
+          env (assoc env
+                     ::initialized (conj (::initialized env) (::id decl)))]
+      env)
     env))
 
 (defmulti is-l-value ::ast/kind)
