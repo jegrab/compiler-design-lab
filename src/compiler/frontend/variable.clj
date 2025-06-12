@@ -181,7 +181,7 @@
   (let [errors (for [used (used-vars (::expr assign))
                      :when (not ((::initialized env) (::id used)))]
                  (err/make-semantic-error (str "accessing uninitialized variable " (::name used)))) 
-        env (assoc env ::errors (into (:errors env) errors))
+        env (assoc env ::errors (into (::errors env) errors))
         env (assoc env
                    ::initialized (conj (::initialized env) (::id (::l-value assign))))]
     env))
@@ -195,5 +195,5 @@
              (let [x (check-initialization (first flow) env)]
                x)))))
 
-(defn check-init-in-all-flows [flows]
-  (apply set/union (map check-init-in-flow flows)))
+(defn check-init-in-all-flows [flows] 
+  (set (apply concat (map (comp ::errors check-init-in-flow) flows))))

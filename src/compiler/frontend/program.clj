@@ -109,8 +109,7 @@
             flows (stmt/minimal-flow-paths body)
             all-flows-contain-return (every? #(some is-return %) flows)
             flows-up-to-return (map #(take-throughv (comp not is-return) %) flows)
-            init-check (var/check-init-in-all-flows flows-up-to-return)
-            init-errs (::var/errors init-check)]
+            init-errs (var/check-init-in-all-flows flows-up-to-return)]
         ;(println "flows-to-return: " (map #(mapv ast/pretty-print %) flows-up-to-return))  
         {::code body
          ::errors (set/union
