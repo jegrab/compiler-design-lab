@@ -26,3 +26,6 @@
    but for loops only the empty sequence.
    Each path is a vector of statements."
   (fn [stmt] (::ast/kind stmt)))
+
+(defmulti ends-flow ::ast/kind)
+(defmethod ends-flow :default [_] false)

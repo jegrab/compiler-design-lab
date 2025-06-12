@@ -35,6 +35,7 @@
     break))
 (defmethod stmt/to-ir ::break [_] [[::ir/goto dyn-label-end]])
 (defmethod stmt/minimal-flow-paths ::break [break] [[break]])
+(defmethod stmt/ends-flow ::break [_] true)
 
 (p/defrule stmt/parse-statement ::continue
   [_ (token ::lex/continue)
@@ -51,6 +52,7 @@
     c))
 (defmethod stmt/to-ir ::continue [_] [[::ir/goto dyn-label-cont]])
 (defmethod stmt/minimal-flow-paths ::continue [cont] [[cont]])
+(defmethod stmt/ends-flow ::continue [_] true)
 
 (defn for-node [init test step body]
   {::ast/kind ::for

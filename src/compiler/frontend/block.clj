@@ -56,11 +56,12 @@
 (defmethod stmt/to-ir ::block [block]
   (loop [stmts (::stmts block)
          res []]
-    (if (empty? stmts)
-      res
-      (recur 
-       (rest stmts)
-       (into [] (concat res (stmt/to-ir (first stmts))))))))
+    (cond (empty? stmts) res
+          (stmt/ends-flow (first stmts)) (concat res (stmt/to-ir (first stmts)))
+          :else
+          (recur
+           (rest stmts)
+           (into [] (concat res (stmt/to-ir (first stmts))))))))
 
 (defn- add-all-path-combs [first second]
   (for [f first

@@ -58,6 +58,8 @@
 (defmethod stmt/minimal-flow-paths ::return [ret]
   [[ret]])
 
+(defmethod stmt/ends-flow ::return [_] true)
+
 (defmulti is-return ::ast/kind)
 (defmethod is-return ::return [_] true)
 (defmethod is-return :default [_] false)
