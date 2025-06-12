@@ -15,11 +15,23 @@
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
-(defmulti used-vars (fn [node] (::ast/kind node)))
-(defmethod used-vars :default [node]
-  (if (vector? node)
-    (apply set/union (map used-vars node))
-    (apply set/union (map #(used-vars (% node)) (::ast/children node)))))
+;(defmulti used-vars (fn [node] (::ast/kind node)))
+;(defmethod used-vars :default [node]
+;  (if (vector? node)
+;    (apply set/union (map used-vars node))
+;    (apply set/union (map #(used-vars (% node)) (::ast/children node)))))
+;(defmethod used-vars ::identifier [id] #{id})
+
+
+(defn collect-used-vars [ast]
+  (filter #(= ::identifier (::ast/kind %))
+          (tree-seq (fn [n] (or (::ast/kind n) (vector? n)))
+                    (fn [node]
+                      (if (vector? node)
+                        node
+                        (map #(% node) (::ast/children node)))) ast)))
+
+(defn used-vars [ast] (collect-used-vars ast))
 
 (def default-init-env {::initialized #{} ::errors #{}})
 (defmulti check-initialization
@@ -61,8 +73,6 @@
 
 (defmethod expr/to-ir ::identifier [id into]
   [[::ir/assign into (::id id)]])
-
-(defmethod used-vars ::identifier [id] #{id})
 
 
 (p/defrule stmt/parse-simp ::declaration
