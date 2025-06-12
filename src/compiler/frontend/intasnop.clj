@@ -21,6 +21,8 @@
 (p/defrule asnop-parser ::bit-or-assign [_ (token ::lex/bit-or-assign)] ::int/bit-or)
 (p/defrule asnop-parser ::bit-and-assign [_ (token ::lex/bit-and-assign)] ::int/bit-and)
 (p/defrule asnop-parser ::bit-xor-assign [_ (token ::lex/bit-xor-assign)] ::int/bit-xor)
+(p/defrule asnop-parser ::shift-left-assign [_ (token ::lex/shift-left-assign)] ::int/shift-left)
+(p/defrule asnop-parser ::shift-right-assign [_ (token ::lex/shift-right-assign)] ::int/shift-right)
 
 
 (p/defrule stmt/parse-simp ::assnop

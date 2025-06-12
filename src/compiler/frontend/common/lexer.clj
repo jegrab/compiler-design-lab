@@ -89,6 +89,19 @@
                     :else nil)
       :second-state nil)))
 
+(defn- starting-with-angle []
+  (fn [char state]
+    (case state
+      nil :first-char
+      :first-char (cond
+                    (= \= char) :eq
+                    (= \< char) :long
+                    (= \> char) :long
+                    :else nil) 
+      :long (cond (= \= char) :eq
+                  :else nil)
+      :eq nil)))
+
 (defn- hex-char [char]
   ((one-of-pred "abcdefABCDEF0123456789") char))
 
@@ -153,7 +166,8 @@
     nil? nil
     (one-of-pred "(){};") (make-one-char-token input ::separator)
     ;#(= % \=) (make-one-char-token input ::operator)
-    (one-of-pred "+-*/%!&|?:=<>~^") (make-multi-char-token input ::operator (optional-trailing-character))
+    (one-of-pred "<>") (make-multi-char-token input ::operator (starting-with-angle))
+    (one-of-pred "+-*/%!&|?:=~^") (make-multi-char-token input ::operator (optional-trailing-character))
     #(= % \0) (assoc-in (make-multi-char-token input ::numerical-constant (starting-with-zero))
                         [0 ::num-kind] ::hex)
     (one-of-pred "123456789") (assoc-in
@@ -213,6 +227,8 @@
     ">=" (add-kind token ::greater-then-or-equal)
     "<<" (add-kind token ::shift-left)
     ">>" (add-kind token ::shift-right)
+    "<<=" (add-kind token ::shift-left-assign)
+    ">>=" (add-kind token ::shift-right-assign)
     "~" (add-kind token ::bit-not)
     "|" (add-kind token ::bit-or)
     "&" (add-kind token ::bit-and)
