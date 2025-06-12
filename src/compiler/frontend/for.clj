@@ -131,4 +131,7 @@
                 [[::ir/goto label-start]
                  [::ir/target label-end]])))))
 
-(defmethod stmt/minimal-flow-paths ::for [block] [[]])
+(defmethod stmt/minimal-flow-paths ::for [for] 
+  [(if (::init for)
+     [(::init for)]
+     [])])

@@ -1,5 +1,6 @@
 (ns compiler.frontend.program
-  (:require [compiler.frontend.common.ast :as ast]
+  (:require [clojure.set :as set]
+            [compiler.frontend.common.ast :as ast]
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.parser :as p]
             [compiler.frontend.statement :as stmt]
@@ -107,12 +108,16 @@
             [body env] (stmt/typecheck body env)
             flows (stmt/minimal-flow-paths body)
             all-flows-contain-return (every? #(some is-return %) flows)
-            flows-up-to-return (map #(take-throughv (comp not is-return) %) flows)]
-        ;(println "flows-to-return: " (map #(mapv ast/pretty-print %) flows-up-to-return)) 
+            flows-up-to-return (map #(take-throughv (comp not is-return) %) flows)
+            init-check (var/check-init-in-all-flows flows-up-to-return)
+            init-errs (::var/errors init-check)]
+        ;(println "flows-to-return: " (map #(mapv ast/pretty-print %) flows-up-to-return))  
         {::code body
-         ::errors (if-not all-flows-contain-return
-                    #{(err/make-semantic-error "missing return statement")}
-                    nil)})
+         ::errors (set/union
+                   init-errs
+                   (if-not all-flows-contain-return
+                     #{(err/make-semantic-error "missing return statement")}
+                     nil))})
 
       :else
       {::code nil

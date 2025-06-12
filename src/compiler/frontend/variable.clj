@@ -1,5 +1,6 @@
 (ns compiler.frontend.variable
-  (:require [compiler.frontend.common.ast :as ast]
+  (:require [clojure.set :as set]
+            [compiler.frontend.common.ast :as ast]
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.parser :as p]
             [compiler.frontend.expression :as expr]
@@ -14,7 +15,25 @@
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
-(def default-env {::names {} ::initialized {} ::declared {} ::types {}})
+(defmulti used-vars (fn [node] (::ast/kind node)))
+(defmethod used-vars :default [node]
+  (if (vector? node)
+    (apply set/union (map used-vars node))
+    (apply set/union (map #(used-vars (% node)) (::ast/children node)))))
+
+(def default-init-env {::initialized #{} ::errors #{}})
+(defmulti check-initialization
+  "takes a node and an env and returns a new env"
+  (fn [node env] (::ast/kind node)))
+(defmethod check-initialization :default [node env]
+  (assoc env
+         ::errors
+         (into (::errors env)
+               (for [used (used-vars node)
+                     :when (not ((::initialized env) (::id used)))]
+                 (err/make-semantic-error (str "accessing uninitialized variable " (::name used)))))))
+
+(def default-env {::names {} ::declared {} ::types {}})
 
 (def ^:dynamic in-l-value false)
 
@@ -29,15 +48,11 @@
 
 (defmethod ast/pretty-print ::identifier [id] :else (str (::name id)))
 
-(defmethod name/resolve-names-expr ::identifier [ident env] 
+(defmethod name/resolve-names-expr ::identifier [ident env]
   (cond
     (not ((::names env) (::name ident)))
     (err/add-error ident (err/make-semantic-error (str "accessing unknown variable " (::name ident))))
-
-    (and (not ((::initialized env) ((::names env) (::name ident))))
-         (not in-l-value))
-    (err/add-error ident (err/make-semantic-error (str "accessing uninizialized variable " (::name ident))))
-
+    
     :else
     (assoc ident ::id ((::names env) (::name ident)))))
 
@@ -46,6 +61,8 @@
 
 (defmethod expr/to-ir ::identifier [id into]
   [[::ir/assign into (::id id)]])
+
+(defmethod used-vars ::identifier [id] #{id})
 
 
 (p/defrule stmt/parse-simp ::declaration
@@ -75,8 +92,7 @@
        (err/add-error new-decl (err/make-semantic-error (str "variable " name " is already declared.")))
        new-decl)
      (assoc-in
-      (assoc-in (assoc-in env [::names name] id)
-                [::initialized id] (if (::value decl) true nil))
+      (assoc-in env [::names name] id)
       [::declared name] true)]))
 
 (defmethod stmt/to-ir ::declare [decl]
@@ -98,6 +114,12 @@
 
 (defmethod stmt/minimal-flow-paths ::declare [decl]
   [[decl]])
+
+(defmethod check-initialization ::declare [decl env]
+  (if (::value decl)
+    (assoc env
+           ::initialized (conj (::initialized env) (::id decl)))
+    env))
 
 (defmulti is-l-value ::ast/kind)
 (defmethod is-l-value :default [_] false)
@@ -127,12 +149,11 @@
   (let [l-v (binding
              [in-l-value true]
               (name/resolve-names-expr (::l-value assign) env))
-        lv-id (::id l-v)
         expr (name/resolve-names-expr (::expr assign) env)]
     [(assoc assign
             ::l-value l-v
             ::expr expr)
-     (assoc-in env [::initialized lv-id] true)]))
+     env]))
 
 (defmethod stmt/to-ir ::assign [assign]
   (expr/to-ir (::expr assign) (::id (::l-value assign))))
@@ -150,3 +171,19 @@
 
 (defmethod stmt/minimal-flow-paths ::assign [assign]
   [[assign]])
+
+(defmethod check-initialization ::assign [assign env]
+  (assoc env
+         ::initialized (conj (::initialized env) (::id (::l-value assign)))))
+
+(defn check-init-in-flow [flow]
+  (loop [flow flow
+         env default-init-env]
+    (if (empty? flow)
+      env
+      (recur (rest flow)
+             (let [x (check-initialization (first flow) env)]
+               x)))))
+
+(defn check-init-in-all-flows [flows]
+  (apply set/union (map check-init-in-flow flows)))
