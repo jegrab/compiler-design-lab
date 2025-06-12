@@ -135,9 +135,11 @@
   (let [init (if (::init for)
                [(::init for)]
                [])
+        test {::ast/children [::test]
+              ::test (::test for)}
         body-paths (stmt/minimal-flow-paths (::body for))
         step (if (::step for)
                [(::step for)]
                [])
-        body-with-stuff-parts (mapv #(into [] (concat init % step)) body-paths)]
+        body-with-stuff-parts (mapv #(into [] (concat init test % step)) body-paths)]
     (conj body-with-stuff-parts init)))

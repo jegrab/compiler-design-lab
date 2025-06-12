@@ -84,4 +84,5 @@
   (if (::else if)
     (into (stmt/minimal-flow-paths (::then if))
           (stmt/minimal-flow-paths (::else if)))
-    [[]]))
+    (into (stmt/minimal-flow-paths (::then if))
+          [[]])))
