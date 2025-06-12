@@ -72,7 +72,7 @@
    body stmt/parse-statement]
   (for-node init test step body))
 
-(defmethod ast/check-after-parse ::for [for] 
+(defmethod ast/check-after-parse ::for [for]
   (let [step-is-decl (= ::var/declare (::ast/kind (::step for)))
         for (if step-is-decl
               (err/add-error for (err/make-semantic-error (str "step statement in loop can't be a declaration")))
@@ -131,13 +131,15 @@
                 [[::ir/goto label-start]
                  [::ir/target label-end]])))))
 
-(defmethod stmt/minimal-flow-paths ::for [for] 
+(defmethod stmt/minimal-flow-paths ::for [for]
   (let [init (if (::init for)
                [(::init for)]
                [])
         test {::ast/children [::test]
               ::test (::test for)}
         body-paths (stmt/minimal-flow-paths (::body for))
+        body-paths (map (fn [path] (take-while #(not (#{::continue ::break} (::ast/kind %))) path))
+                        body-paths)
         step (if (::step for)
                [(::step for)]
                [])
