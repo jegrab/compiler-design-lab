@@ -34,6 +34,7 @@
     (err/add-error break (err/make-semantic-error "break outside of loop"))
     break))
 (defmethod stmt/to-ir ::break [_] [[::ir/goto dyn-label-end]])
+(defmethod stmt/minimal-flow-paths ::break [break] [[break]])
 
 (p/defrule stmt/parse-statement ::continue
   [_ (token ::lex/continue)
@@ -49,6 +50,7 @@
     (err/add-error c (err/make-semantic-error "continue outside of loop"))
     c))
 (defmethod stmt/to-ir ::continue [_] [[::ir/goto dyn-label-cont]])
+(defmethod stmt/minimal-flow-paths ::continue [cont] [[cont]])
 
 (defn for-node [init test step body]
   {::ast/kind ::for
