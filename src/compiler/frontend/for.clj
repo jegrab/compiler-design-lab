@@ -4,6 +4,7 @@
             [compiler.frontend.common.parser :as p]
             [compiler.frontend.statement :as stmt]
             [compiler.frontend.expression :as expr]
+            [compiler.frontend.variable :as var]
             [compiler.frontend.common.namespace :as name]
             [compiler.frontend.bool :as bool]
             [compiler.frontend.common.type :as type]
@@ -69,11 +70,15 @@
    body stmt/parse-statement]
   (for-node init test step body))
 
-(defmethod ast/check-after-parse ::for [for]
-  (binding [in-loop true]
-    (assoc for
-           ::test (ast/check-after-parse (::test for))
-           ::body (ast/check-after-parse (::body for)))))
+(defmethod ast/check-after-parse ::for [for] 
+  (let [step-is-decl (= ::var/declare (::ast/kind (::step for)))
+        for (if step-is-decl
+              (err/add-error for (err/make-semantic-error (str "step statement in loop can't be a declaration")))
+              for)]
+    (binding [in-loop true]
+      (assoc for
+             ::test (ast/check-after-parse (::test for))
+             ::body (ast/check-after-parse (::body for))))))
 
 (defmethod ast/pretty-print ::for [for]
   (str "for (" (if (::init for) (ast/pretty-print (::init for)) "") ";" (ast/pretty-print (::test for)) ";" (if (::step for) (ast/pretty-print (::step for)) "") ")\n{"
