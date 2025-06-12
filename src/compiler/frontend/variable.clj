@@ -173,8 +173,13 @@
   [[assign]])
 
 (defmethod check-initialization ::assign [assign env]
-  (assoc env
-         ::initialized (conj (::initialized env) (::id (::l-value assign)))))
+  (let [errors (for [used (used-vars (::expr assign))
+                     :when (not ((::initialized env) (::id used)))]
+                 (err/make-semantic-error (str "accessing uninitialized variable " (::name used)))) 
+        env (assoc env ::errors (into (:errors env) errors))
+        env (assoc env
+                   ::initialized (conj (::initialized env) (::id (::l-value assign))))]
+    env))
 
 (defn check-init-in-flow [flow]
   (loop [flow flow
