@@ -118,17 +118,12 @@
             [body env] (stmt/typecheck body env)
             [body _] (name/check-initialization-stmt body (name/init-default-env))
             flows (stmt/minimal-flow-paths body)
-            all-flows-contain-return (every? #(some is-return %) flows)
-            flows-up-to-return (map #(take-throughv (comp not is-return) %) flows)
-            init-errs #{} ;(var/check-init-in-all-flows flows-up-to-return)
-            ]
+            all-flows-contain-return (every? #(some is-return %) flows)]
         ;(println "flows-to-return: " (map #(mapv ast/pretty-print %) flows-up-to-return))  
         {::code body
-         ::errors (set/union
-                   init-errs
-                   (if-not all-flows-contain-return
-                     #{(err/make-semantic-error "missing return statement")}
-                     nil))})
+         ::errors (if-not all-flows-contain-return
+                    #{(err/make-semantic-error "missing return statement")}
+                    nil)})
 
       :else
       {::code nil

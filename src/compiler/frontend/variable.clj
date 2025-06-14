@@ -1,6 +1,5 @@
 (ns compiler.frontend.variable
-  (:require [clojure.set :as set]
-            [compiler.frontend.common.ast :as ast]
+  (:require [compiler.frontend.common.ast :as ast]
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.parser :as p]
             [compiler.frontend.expression :as expr]
@@ -14,36 +13,6 @@
 (defn- token [kind]
   (fn [tok]
     (= (::lex/kind tok) kind)))
-
-;(defmulti used-vars (fn [node] (::ast/kind node)))
-;(defmethod used-vars :default [node]
-;  (if (vector? node)
-;    (apply set/union (map used-vars node))
-;    (apply set/union (map #(used-vars (% node)) (::ast/children node)))))
-;(defmethod used-vars ::identifier [id] #{id})
-
-
-(defn collect-used-vars [ast]
-  (filter #(= ::identifier (::ast/kind %))
-          (tree-seq (fn [n] (or (::ast/kind n) (vector? n)))
-                    (fn [node]
-                      (if (vector? node)
-                        node
-                        (map #(% node) (::ast/children node)))) ast)))
-
-(defn used-vars [ast] (collect-used-vars ast))
-
-(def default-init-env {::initialized #{} ::errors #{}})
-(defmulti check-initialization
-  "takes a node and an env and returns a new env"
-  (fn [node env] (::ast/kind node)))
-(defmethod check-initialization :default [node env]
-  (assoc env
-         ::errors
-         (into (::errors env)
-               (for [used (used-vars node)
-                     :when (not ((::initialized env) (::id used)))]
-                 (err/make-semantic-error (str "accessing uninitialized variable " (::name used)))))))
 
 (def default-env {::names {} ::declared {} ::types {}})
 
@@ -130,17 +99,6 @@
 (defmethod stmt/minimal-flow-paths ::declare [decl]
   [[decl]])
 
-(defmethod check-initialization ::declare [decl env]
-  (if (::value decl)
-    (let [errors (for [used (used-vars (::value decl))
-                       :when (not ((::initialized env) (::id used)))]
-                   (err/make-semantic-error (str "accessing uninitialized variable " (::name used))))
-          env (assoc env ::errors (into (:errors env) errors))
-          env (assoc env
-                     ::initialized (conj (::initialized env) (::id decl)))]
-      env)
-    env))
-
 (defmethod name/check-initialization-stmt ::declare [decl env]
   (let [value (if (::value decl)
                 (name/check-initialization-expr (::value decl) env)
@@ -204,31 +162,9 @@
 (defmethod stmt/minimal-flow-paths ::assign [assign]
   [[assign]])
 
-(defmethod check-initialization ::assign [assign env]
-  (let [errors (for [used (used-vars (::expr assign))
-                     :when (not ((::initialized env) (::id used)))]
-                 (err/make-semantic-error (str "accessing uninitialized variable " (::name used)))) 
-        env (assoc env ::errors (into (::errors env) errors))
-        env (assoc env
-                   ::initialized (conj (::initialized env) (::id (::l-value assign))))]
-    env))
-
 (defmethod name/check-initialization-stmt ::assign [assign env]
   (let [expr (name/check-initialization-expr (::expr assign) env)
         env (name/initialize (::id (::l-value assign)) env)]
     [(assoc assign
             ::expr expr)
      env]))
-
-
-(defn check-init-in-flow [flow]
-  (loop [flow flow
-         env default-init-env]
-    (if (empty? flow)
-      env
-      (recur (rest flow)
-             (let [x (check-initialization (first flow) env)]
-               x)))))
-
-(defn check-init-in-all-flows [flows] 
-  (set (apply concat (map (comp ::errors check-init-in-flow) flows))))
