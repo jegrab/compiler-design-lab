@@ -75,7 +75,7 @@
   [[::ir/assign into (::id id)]])
 
 (defmethod name/check-initialization-expr ::identifier [id env]
-  (if-not ((::initialized env) (::id id))
+  (if-not ((::name/initialized env) (::id id))
     (err/add-error id (err/make-semantic-error (str "accessing uninitialized variable " (::name id))))
     id))
 
