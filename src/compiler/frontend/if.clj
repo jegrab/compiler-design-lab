@@ -90,12 +90,15 @@
 
 (defmethod name/check-initialization-stmt ::if [if env]
   (let [[new-then then-env] (name/check-initialization-stmt (::then if) env)
-        [new-else else-env] (if (::else env)
+        [new-else else-env] (if (::else if)
                               (name/check-initialization-stmt (::else if) env)
                               [(::else if) env])
-        env (assoc env 
-                   ::name/initialized (set/intersection (::name/initialized then-env) (::name/initialized else-env)))]
+        new-env (assoc env 
+                       ::name/initialized (set/intersection (::name/initialized then-env) (::name/initialized else-env)))]
+    (println "before env:" env)
+    (println "then-env:" then-env "\n\n else env: " else-env)
+    (println "new env:" new-env)
     [(assoc if
             ::then new-then
             ::else new-else)
-     env]))
+     new-env]))
