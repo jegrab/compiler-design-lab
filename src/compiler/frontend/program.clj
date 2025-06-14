@@ -58,6 +58,14 @@
 (defmethod stmt/minimal-flow-paths ::return [ret]
   [[ret]])
 
+(defmethod name/check-initialization-stmt ::return [ret env]
+  (let [expr (name/check-initialization-expr (::ret-expr ret) env)
+        env (assoc env
+                   ::name/initialized (set/union (::name/initialized env)
+                                                 (::name/defined env)))]
+    [(assoc ret ::ret-expr expr)
+     env]))
+
 (defmethod stmt/ends-flow ::return [_] true)
 
 (defmulti is-return ::ast/kind)
@@ -108,10 +116,12 @@
             body (ast/check-after-parse body)
             [body env] (name/resolve-names-stmt body env)
             [body env] (stmt/typecheck body env)
+            [body _] (name/check-initialization-stmt body (name/init-default-env))
             flows (stmt/minimal-flow-paths body)
             all-flows-contain-return (every? #(some is-return %) flows)
             flows-up-to-return (map #(take-throughv (comp not is-return) %) flows)
-            init-errs (var/check-init-in-all-flows flows-up-to-return)]
+            init-errs #{} ;(var/check-init-in-all-flows flows-up-to-return)
+            ]
         ;(println "flows-to-return: " (map #(mapv ast/pretty-print %) flows-up-to-return))  
         {::code body
          ::errors (set/union

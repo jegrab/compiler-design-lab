@@ -1,5 +1,6 @@
 (ns compiler.frontend.if
-  (:require [compiler.frontend.common.id :as id]
+  (:require [clojure.set :as set]
+            [compiler.frontend.common.id :as id]
             [compiler.frontend.common.ast :as ast]
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.parser :as p]
@@ -86,3 +87,15 @@
           (stmt/minimal-flow-paths (::else if)))
     (into (stmt/minimal-flow-paths (::then if))
           [[]])))
+
+(defmethod name/check-initialization-stmt ::if [if env]
+  (let [[new-then then-env] (name/check-initialization-stmt (::then if) env)
+        [new-else else-env] (if (::else env)
+                              (name/check-initialization-stmt (::else if) env)
+                              [(::else if) env])
+        env (assoc env 
+                   ::name/initialized (set/intersection (::name/initialized then-env) (::name/initialized else-env)))]
+    [(assoc if
+            ::then new-then
+            ::else new-else)
+     env]))

@@ -74,6 +74,11 @@
 (defmethod expr/to-ir ::identifier [id into]
   [[::ir/assign into (::id id)]])
 
+(defmethod name/check-initialization-expr ::identifier [id env]
+  (if-not ((::initialized env) (::id id))
+    (err/add-error id (err/make-semantic-error (str "accessing uninitialized variable " (::name id))))
+    id))
+
 
 (p/defrule stmt/parse-simp ::declaration
   [type type/parse
@@ -136,6 +141,18 @@
       env)
     env))
 
+(defmethod name/check-initialization-stmt ::declare [decl env]
+  (let [value (if (::value decl)
+                (name/check-initialization-expr (::value decl) env)
+                (::value decl))
+        env (name/define (::id decl) env)
+        env (if value
+              (name/initialize (::id decl) env)
+              env)]
+    [(assoc decl
+            ::value value)
+     env]))
+
 (defmulti is-l-value ::ast/kind)
 (defmethod is-l-value :default [_] false)
 (defmethod is-l-value ::identifier [_] true)
@@ -195,6 +212,14 @@
         env (assoc env
                    ::initialized (conj (::initialized env) (::id (::l-value assign))))]
     env))
+
+(defmethod name/check-initialization-stmt ::assign [assign env]
+  (let [expr (name/check-initialization-expr (::expr assign) env)
+        env (name/initialize (::id (::l-value assign)) env)]
+    [(assoc assign
+            ::expr expr)
+     env]))
+
 
 (defn check-init-in-flow [flow]
   (loop [flow flow

@@ -76,3 +76,15 @@
       (recur 
        (rest stmts)
        (add-all-path-combs res (stmt/minimal-flow-paths (first stmts)))))))
+
+(defmethod name/check-initialization-stmt ::block [block env]
+  (loop [stmts (::stmts block)
+         new-stmts []
+         env env]
+    (if (empty? stmts)
+      [(assoc block ::stmts new-stmts) env]
+      (let [[new-stmt env] (name/check-initialization-stmt (first stmts) env)]
+        (recur
+         (rest stmts)
+         (conj new-stmts new-stmt)
+         env)))))

@@ -1,5 +1,6 @@
 (ns compiler.frontend.for
-  (:require [compiler.frontend.common.ast :as ast]
+  (:require [clojure.set :as set]
+            [compiler.frontend.common.ast :as ast]
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.parser :as p]
             [compiler.frontend.statement :as stmt]
@@ -36,6 +37,10 @@
 (defmethod stmt/to-ir ::break [_] [[::ir/goto dyn-label-end]])
 (defmethod stmt/minimal-flow-paths ::break [break] [[break]])
 (defmethod stmt/ends-flow ::break [_] true)
+(defmethod name/check-initialization-stmt ::break [ret env]
+  [ret
+   (assoc env ::name/initialized (set/union (::name/initialized env)
+                                            (::name/defined env)))])
 
 (p/defrule stmt/parse-statement ::continue
   [_ (token ::lex/continue)
@@ -53,6 +58,10 @@
 (defmethod stmt/to-ir ::continue [_] [[::ir/goto dyn-label-cont]])
 (defmethod stmt/minimal-flow-paths ::continue [cont] [[cont]])
 (defmethod stmt/ends-flow ::continue [_] true)
+(defmethod name/check-initialization-stmt ::continue [cont env]
+  [cont
+   (assoc env ::name/initialized (set/union (::name/initialized env)
+                                            (::name/defined env)))])
 
 (defn for-node [init test step body]
   {::ast/kind ::for
@@ -147,3 +156,19 @@
                [])
         body-with-stuff-parts (mapv #(into [] (concat init test % step)) body-paths)]
     (conj body-with-stuff-parts init)))
+
+(defmethod name/check-initialization-stmt ::for [for env]
+  (let [[init env] (if (::init for)
+                        (name/check-initialization-stmt (::init for) env)
+                        [(::init for) env])
+        test (name/check-initialization-expr (::test for) env)
+        [body body-env] (name/check-initialization-stmt (::body for) env)
+        [step _] (if (::step for)
+                   (name/check-initialization-stmt (::step for) body-env)
+                   [(::step for) body-env])]
+    [(assoc for
+            ::init init
+            ::test test
+            ::body body
+            ::step step)
+     env]))
