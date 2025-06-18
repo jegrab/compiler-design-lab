@@ -1,5 +1,6 @@
 (ns compiler.middleend.ir
-  (:require [clojure.spec.alpha :as s]))
+  (:require [clojure.spec.alpha :as s]
+            [clojure.string :as str]))
 
 (s/def ::instruction-name keyword?)
 ;(s/def ::instruction (s/cat ::instruction-name))
@@ -10,18 +11,10 @@
 ; [::assign var r-val]
 
 (def start
-  [".global main"
-   ".global _main"
+  [".global my_main"
    ".text"
-
-   "main:"
-   "call _main"
-
-   "movq %rax, %rdi" ; move the return value into the first argument for the syscall
-   "movq $0x3C, %rax" ; move the exit syscall number into rax
-   "syscall"
-
-   "_main:"])
+   
+   "my_main:"])
 
 (defmulti get-res-var-name first)
 (defmethod get-res-var-name ::assign [[assign dest input]] dest)
@@ -86,6 +79,77 @@
      (str "cmp " "%eax" ", " (read-stack a))
      (str "jge " target)]))
 
+(defn fun-id-to-sym [fun-id]
+  (str/replace (str "fun_" fun-id) #"[:-]" ""))
+
+(def param-register-sequence ["edi" "esi" "edx" "r8d" "r9d"])
+
+(defn put-args [tmps var-ids]
+  (loop [res []
+         count-done 0
+         put-on-stack 0
+         tmps tmps]
+    (cond 
+      (and (empty? tmps)
+           (zero? (mod put-on-stack 2)))
+      [res (* 8 put-on-stack)]
+      
+      (empty? tmps)
+      (recur (conj res "pushq $0")
+             count-done
+             (inc put-on-stack)
+             tmps)
+      
+      (< count-done (count param-register-sequence))
+      (recur (conj res (str "movl " 
+                            (read-stack (* 4 (var-ids (first tmps))))
+                            ", %" (nth param-register-sequence count-done)))
+             (inc count-done)
+             put-on-stack
+             (rest tmps))
+      :else
+      (recur (conj res (str "push "
+                            (read-stack (* 4 (var-ids (first tmps))))))
+             count-done
+             (inc put-on-stack)
+             (rest tmps)))))
+
+(defn codegen-assign-call [[call fun-id & tmps] dest-offset var-ids]
+  (let [[put-args-code additional-stack-size] (put-args tmps var-ids)]
+    (into
+     put-args-code
+     [(str "call " (fun-id-to-sym fun-id))
+      (str "add $" additional-stack-size ", %rsp")
+      (str "movl %eax, " (read-stack dest-offset))])))
+
+(def print-code
+  [(str (fun-id-to-sym :print) ":")
+   "pushq %rbp"
+   "movq %rsp, %rbp"
+   "call putchar"
+   "leave"
+   "ret"
+   ""])
+
+(def read-code
+  [(str (fun-id-to-sym :read) ":")
+   "pushq %rbp"
+   "movq %rsp, %rbp"
+   "call getchar"
+   "leave"
+   "ret"
+   ""])
+
+(def flush-code
+  [(str (fun-id-to-sym :flush) ":")
+   "pushq %rbp"
+   "movq %rsp, %rbp"
+   "movq stdout(%rip), %rdi"
+   "call fflush"
+   "leave"
+   "ret"
+   ""])
+
 (defmethod codegen ::assign [[assign dest input] var-ids]
 
   (let [dest-offset (* 4 (var-ids dest))]
@@ -103,7 +167,7 @@
         [(str "movl " (read-stack source-offset) ", %eax" " # " dest " = -" input)
          "negl %eax"
          (str "movl %eax, " (read-stack dest-offset))])
-      
+
       (and (vector? input)
            (= ::bit-not (first input)))
       (let [source-offset (* 4 (var-ids (second input)))]
@@ -130,7 +194,7 @@
          (str "movl %eax, " (read-stack dest-offset))])
 
       (and (vector? input)
-           (= ::shift-right(first input)))
+           (= ::shift-right (first input)))
       (let [left-offset (* 4 (var-ids (nth input 1)))
             right-offset (* 4 (var-ids (nth input 2)))]
         [(str "movl " (read-stack left-offset) ", %eax")
@@ -166,15 +230,26 @@
          "cltd"
          (str "movl " (read-stack right-offset) ", %ebx")
          (str "idivl %ebx")
-         (str "movl %edx, " (read-stack dest-offset))]))))
+         (str "movl %edx, " (read-stack dest-offset))])
+      (and (vector? input)
+           (= ::call (first input)))
+      (codegen-assign-call input dest-offset var-ids))))
+
+(defn align-to-16-bytes [needed-bytes]
+  (let [rem (rem needed-bytes 16)]
+    (if (zero? rem)
+      needed-bytes
+      (+ needed-bytes (- 16 rem)))))
 
 (defn make-code [instrs]
   (let [num-vars (enumerate-vars instrs)
         asm-lines (apply concat (map #(codegen % num-vars) instrs))
+        preamble (concat print-code read-code flush-code)
         before start
+        stack-bytes (align-to-16-bytes (* 4 (count (enumerate-vars instrs))))
         make-stack ["pushq %rbp"
                     "movq %rsp, %rbp"
-                    (str "subq $" (* 4 (count (enumerate-vars instrs))) ", %rsp")]
+                    (str "subq $" stack-bytes ", %rsp")]
         after ["\n"]
-        whole (concat before make-stack asm-lines after)]
+        whole (concat preamble before make-stack asm-lines after)]
     (clojure.string/join "\n" whole)))

@@ -164,7 +164,7 @@
 (defn- lex-one-token [input]
   (condp #(%1 %2) (in/current input)
     nil? nil
-    (one-of-pred "(){};") (make-one-char-token input ::separator)
+    (one-of-pred "(){};,") (make-one-char-token input ::separator)
     ;#(= % \=) (make-one-char-token input ::operator)
     (one-of-pred "<>") (make-multi-char-token input ::operator (starting-with-angle))
     (one-of-pred "+-*/%!&|?:=~^") (make-multi-char-token input ::operator (optional-trailing-character))
@@ -199,7 +199,8 @@
     ")" (add-kind token ::right-parentheses)
     "{" (add-kind token ::left-brace)
     "}" (add-kind token ::right-brace)
-    ";" (add-kind token ::semicolon)))
+    ";" (add-kind token ::semicolon)
+    "," (add-kind token ::comma)))
 
 (defmethod postprocess-token ::operator [token]
   (case (::source-string token)
@@ -253,7 +254,7 @@
       (catch Exception e (err/add-error token error)))))
 
 
-(def ^:private keyword-strings ["struct" "if" "else" "while" "for" "continue" "break" "return" "assert" "true" "false" "NULL" "print" "read" "alloc" "alloc_array" "int" "bool"
+(def ^:private keyword-strings ["struct" "if" "else" "while" "for" "continue" "break" "return" "assert" "true" "false" "NULL" "print" "read" "flush" "alloc" "alloc_array" "int" "bool"
                                 "void" "char" "string"])
 
 (def ^:private keywords (loop [res {}

@@ -8,6 +8,7 @@
    [compiler.frontend.common.parser :as p]
    [compiler.frontend.common.error :as err]
    [compiler.frontend.common.id :as id]
+   [compiler.frontend.statement :as stmt]
    [compiler.middleend.ir :as ir]
    [compiler.frontend.common.namespace :as name]))
 
@@ -31,3 +32,31 @@
    e parse-expr
    _ (token ::lex/right-parentheses)]
   e)
+
+
+(p/defrule stmt/parse-simp ::expr-stmt
+  (p/p-let [e parse-expr]
+           {::ast/kind ::expr-stmt
+            ::ast/children [::expr]
+            ::expr e}))
+
+(defmethod ast/pretty-print ::expr-stmt [e]
+  (str (ast/pretty-print (::expr e)) ";"))
+
+(defmethod name/resolve-names-stmt ::expr-stmt [e env]
+  [(assoc e ::expr (name/resolve-names-expr (::expr e) env))
+   env])
+
+(defmethod stmt/to-ir ::expr-stmt [e]
+  (let [tmp (id/make-tmp)]
+    (to-ir (::expr e) tmp)))
+
+(defmethod stmt/typecheck ::expr-stmt [e env]
+  [(assoc e ::expr (typecheck (::expr e) env))
+   env])
+
+(defmethod stmt/minimal-flow-paths ::expr-stmt [e] [[e]])
+
+(defmethod name/check-initialization-stmt ::expr-stmt [e env]
+  [(assoc e ::expr (name/check-initialization-expr (::expr e) env))
+   env])

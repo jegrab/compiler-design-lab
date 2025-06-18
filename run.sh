@@ -12,4 +12,8 @@ outputFile="${!#}"
 
 java -cp "$CLASSPATH:$OUT_DIR" compiler.core $inputFile $outputFile.s \
 && \
-gcc "$outputFile.s" -o "$outputFile"
+gcc -c "$outputFile.s" \
+&& \
+gcc -c main.c \
+&& \
+gcc -o "$outputFile" main.o out.o

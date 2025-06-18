@@ -14,6 +14,7 @@
             [compiler.frontend.intcomp :as intcomp]
             [compiler.frontend.while :as while]
             [compiler.frontend.for :as for]
+            [compiler.frontend.function :as fun]
             [compiler.frontend.block :as block]
             [compiler.frontend.common.namespace :as name]
             [compiler.middleend.ir :as ir]
@@ -111,7 +112,7 @@
        ::errors #{(err/make-parser-error "illegal token detected")}}
 
       (::p/success prog)
-      (let [env (assoc var/default-env ::ret-type int/int-type)
+      (let [env (fun/setup-env (assoc var/default-env ::ret-type int/int-type))
             body (::body (::p/value prog))
             body (ast/check-after-parse body)
             [body env] (name/resolve-names-stmt body env)
@@ -131,3 +132,10 @@
 
 (defn to-ir [ast]
   (stmt/to-ir ast))
+
+;only support call as expression statement
+(defmethod ast/check-after-parse ::expr/expr-stmt [e]
+  (if (not= (::ast/kind (::expr/expr e)) ::fun/call)
+    (err/add-error e
+                   (err/make-parser-error "only function calls allowed as expression statement"))
+    e))

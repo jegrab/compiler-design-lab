@@ -2,8 +2,7 @@
   (:require [compiler.frontend.common.lexer :as lex] 
             [compiler.frontend.common.parser :as p] 
             [compiler.frontend.common.ast :as ast]
-            [compiler.frontend.common.error :as err]
-            [compiler.frontend.expression :as expr]))
+            [compiler.frontend.common.error :as err]))
 
 (p/defmultiparser parse-statement)
 (p/defmultiparser parse-simp)
