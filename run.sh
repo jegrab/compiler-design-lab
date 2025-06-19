@@ -9,11 +9,16 @@ CLASSPATH="$CLJ_JAR:$SPEC_ALPHA_JAR:$CORE_SPECS_ALPHA_JAR:$CLASS_DIR"
 
 inputFile="$1"
 outputFile="${!#}"
+buildDir=build
 
-java -cp "$CLASSPATH:$OUT_DIR" compiler.core $inputFile $outputFile.s \
+rm -rf $buildDir \
+&&\
+mkdir -p $buildDir \
+&&\
+java -cp "$CLASSPATH" compiler.core $inputFile "$buildDir/out.s" \
 && \
-gcc -c "$outputFile.s" \
+gcc -c "$buildDir/out.s" -o "$buildDir/out.o" \
 && \
-gcc -c main.c \
+gcc -c main.c -o "$buildDir/main.o" \
 && \
-gcc -o "$outputFile" main.o out.o
+gcc -o "$outputFile" "$buildDir/main.o" "$buildDir/out.o"
