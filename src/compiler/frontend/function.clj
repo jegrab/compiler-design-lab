@@ -99,7 +99,7 @@
 (defmethod name/resolve-names-expr ::call [call env]
   (cond
     (not ((::names env) (::function-name call)))
-    (err/add-error call (err/make-semantic-error (str "calling unknown function" (::function-name call))))
+    (err/add-error call (err/make-semantic-error (str "calling unknown function " (::function-name call))))
 
     :else
     (assoc call
@@ -124,7 +124,7 @@
                                      (::args fun-type)
                                      args-with-types))
         errs (into errs type-mismatches)
-        ret-type (::return fun-type)]
+        ret-type (or (::return fun-type) type/unknown)]
     (err/add-errors
      (assoc call
             ::args args-with-types
