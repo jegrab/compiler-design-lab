@@ -9,7 +9,7 @@ CLASSPATH="$CLJ_JAR:$SPEC_ALPHA_JAR:$CORE_SPECS_ALPHA_JAR:$CLASS_DIR"
 
 inputFile="$1"
 outputFile="${!#}"
-buildDir=build
+buildDir=stuff
 
 rm -rf $buildDir \
 &&\

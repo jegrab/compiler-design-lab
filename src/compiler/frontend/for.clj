@@ -90,6 +90,8 @@
               for)]
     (binding [in-loop true]
       (assoc for
+             ::step (ast/check-after-parse (::step for))
+             ::init (ast/check-after-parse (::init for))
              ::test (ast/check-after-parse (::test for))
              ::body (ast/check-after-parse (::body for))))))
 
