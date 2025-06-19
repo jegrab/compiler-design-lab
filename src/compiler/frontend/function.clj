@@ -266,7 +266,7 @@
             ::types (assoc (::types env) id type))]))
 
 (defmethod name/resolve-names-stmt ::function-def [def env]
-  (let [[new-params env] (loop [env env
+  (let [[new-params body-env] (loop [env env
                                 new-params []
                                 params (::params def)]
                            (if (empty? params) [new-params env]
@@ -275,7 +275,7 @@
                                  (recur e
                                         (conj new-params p)
                                         (rest params)))))
-        [new-body _] (name/resolve-names-stmt (::body def) env)]
+        [new-body _] (name/resolve-names-stmt (::body def) body-env)]
     [(assoc def
             ::body new-body
             ::params new-params)

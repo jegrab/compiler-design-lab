@@ -54,6 +54,7 @@
   (try
     (println "input: " (first args) " output: " (second args))
     (main (first args) (second args))
+    (println "compiled successfully :)")
     (System/exit 0)
     (catch clojure.lang.ExceptionInfo e
       (println "error: " (-> e ex-data :cause))
