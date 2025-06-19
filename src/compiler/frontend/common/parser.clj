@@ -182,11 +182,14 @@
           successful (filter ::success runs)
           num-sucesses (count successful)]
       (cond
-        (> num-sucesses 1) (throw (Exception. (str "grammar rules for " name " are nondeterministic.")))
+        (> num-sucesses 1)
+        (let [with-res-lengths (map (fn [run] [run (count (::remaining run))]) runs)
+              longest-res (first (first (sort-by second with-res-lengths)))]
+          longest-res)
         (< num-sucesses 1)
         {::remaining input
-           ::success false
-           ::expected [name]} ;(apply concat (map ::expected runs))}
+         ::success false
+         ::expected [name]} ;(apply concat (map ::expected runs))}
         (= num-sucesses 1) (first successful))))
   (map-success [this mapper]
     (map-success (->SimpleParser (fn [input] (run this input))) mapper)))
