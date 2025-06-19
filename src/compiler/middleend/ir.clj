@@ -28,7 +28,7 @@
 (defmulti codegen (fn [instr var-ids] (first instr)))
 
 (defn read-stack [offset]
-  (str " -" offset "(%rsp)"))
+  (str " -" offset "(%rbp)"))
 
 (defmethod codegen ::return [ret var-ids]
   [(str "movl " (read-stack (* 4 (var-ids ::ret-register)))  ", %eax")
