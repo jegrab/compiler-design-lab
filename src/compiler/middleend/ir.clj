@@ -285,6 +285,8 @@
                 "pushq %rbp"
                 "movq %rsp, %rbp"
                 (str "call " (fun-id-to-sym main-id))
+                "movq stdout(%rip), %rdi"
+                "call fflush"
                 "leave"
                 "ret"
                 "\n"
