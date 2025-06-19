@@ -16,33 +16,35 @@
 (defn- throw-semantic-analysis []
   (throw (ex-info "semantic analysis error" {:exitcode 7 :cause "semantic error"})))
 
-(defn- main [input-file-str output-file-str] 
+(defn print-errors [parser-errors semantic-errors]
+  (println "parser errors: \n" (clojure.string/join "\n" (map ::err/message parser-errors)) "\n")
+  (println "semantic errors: \n" (clojure.string/join "\n" (map ::err/message semantic-errors)) "\n")
+  (.flush *out*))
+
+(defn- main [input-file-str output-file-str]
   (let [input-file (try (slurp input-file-str)
                         (catch java.io.FileNotFoundException e
                           (do
                             (println "input file '" input-file-str "' not found.")
                             (exit-illegal-arguments))))
-        {ast ::p/code
-         ers ::p/errors} (p/build-ast input-file)
-        _ (when-not ast
-            (println "unknown fatal parser error")
+        {decls ::p/decls
+         errs ::p/errors
+         main-id ::p/main-id} (p/frontend input-file)
+        parser-errors (filter #(= ::err/parser (::err/phase %)) errs)
+        semantic-errors (filter #(= ::err/semantic-analysis (::err/phase %)) errs)
+        _ (when-not decls
+            (print-errors parser-errors semantic-errors)
             (exit-parsing))
-        ers (clojure.set/union ers (when ast (ast/collect-errors ast)))
-        parser-errors (filter #(= ::err/parser (::err/phase %)) ers)
-        semantic-errors (filter #(= ::err/semantic-analysis (::err/phase %)) ers)
-        pp (when ast (ast/pretty-print ast))
-        ir (when (and ast (empty? ers)) (p/to-ir ast))
-        asm (when ir (ir/make-code ir))]
-    ;(println "ir: \n" (clojure.string/join "\n" (map str ir)))
-    (println "input: \n" (str pp) "\n")
-    (println "parser errors: \n" (clojure.string/join "\n" (map ::err/message parser-errors)) "\n")
-    (println "semantic errors: \n" (clojure.string/join "\n" (map ::err/message semantic-errors)) "\n")
-    (.flush *out*)
-    (when-not (empty? parser-errors)
-      (exit-parsing))
-    (when-not (empty? semantic-errors)
-      (throw-semantic-analysis))
-    (when asm (spit output-file-str asm))))
+        _ (when-not (empty? parser-errors)
+            (print-errors parser-errors semantic-errors)
+            (exit-parsing))
+        _ (when-not (empty? semantic-errors)
+            (print-errors parser-errors semantic-errors)
+            (throw-semantic-analysis))
+        ;_ (println "input \n" (ast/pretty-print decls) "\n")
+        ir (p/to-ir decls)
+        asm (ir/make-code ir main-id)] 
+    (spit output-file-str asm)))
 
 
 (defn -main [& args]

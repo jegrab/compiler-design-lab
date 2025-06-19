@@ -9,6 +9,7 @@
 
 
 (defmulti pretty-print (fn [ast] (::kind ast)))
+(defmethod pretty-print :default [ast] (str ast))
 
 (defmulti check-after-parse 
   "takes an ast and does some check on the node"

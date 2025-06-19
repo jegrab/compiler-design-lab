@@ -7,11 +7,14 @@
    [compiler.frontend.common.ast :as ast]
    [compiler.frontend.common.lexer :as lex]
    [compiler.frontend.common.parser :as p]
+   [compiler.frontend.toplevel :as top]
    [compiler.frontend.variable :as var]
+   [compiler.frontend.block :as block]
    [compiler.frontend.common.namespace :as name]
    [compiler.frontend.expression :as expr]
    [compiler.middleend.ir :as ir]
-   [compiler.frontend.integer :as int]))
+   [compiler.frontend.integer :as int]
+   [compiler.frontend.statement :as stmt]))
 
 ; function type is map:
 ;{::args [list of arg types]
@@ -146,3 +149,167 @@
     (conj code
           [::ir/assign res (into [::ir/call (::fun-id call)]
                                  tmps)])))
+
+
+(p/defrule stmt/parse-statement ::return
+  [_ (token ::lex/return)
+   ret-expr expr/parse-expr
+   _ (token ::lex/semicolon)]
+  {::ast/kind ::return
+   ::ast/children [::ret-expr]
+   ::ret-expr ret-expr})
+
+(defmethod ast/pretty-print ::return [ret]
+  (str "return " (ast/pretty-print (::ret-expr ret))))
+
+(defmethod name/resolve-names-stmt ::return [ret env]
+  [(assoc ret
+          ::ret-expr (name/resolve-names-expr (::ret-expr ret) env))
+   env])
+
+(defmethod stmt/to-ir ::return [ret]
+  (conj
+   (expr/to-ir (::ret-expr ret) ::ir/ret-register)
+   [::ir/return]))
+
+(defmethod stmt/typecheck ::return [ret env]
+  (let [decl-type (env ::ret-type)
+        new-expr (expr/typecheck (::ret-expr ret) env)
+        actual-type (::type/type new-expr)
+        new-ret (assoc ret ::ret-expr new-expr)]
+    [(if (type/equals decl-type actual-type)
+       new-ret
+       (err/add-error new-ret (err/make-semantic-error (str "type mismatch. should return " decl-type " but returns " actual-type))))
+     env]))
+
+(defmethod stmt/minimal-flow-paths ::return [ret]
+  [[ret]])
+
+(defmethod name/check-initialization-stmt ::return [ret env]
+  (let [expr (name/check-initialization-expr (::ret-expr ret) env)
+        env (assoc env
+                   ::name/initialized (clojure.set/union  (::name/initialized env)
+                                                          (::name/defined env)))]
+    [(assoc ret ::ret-expr expr)
+     env]))
+
+(defmethod stmt/ends-flow ::return [_] true)
+
+(defmulti is-return ::ast/kind)
+(defmethod is-return ::return [_] true)
+(defmethod is-return :default [_] false)
+
+
+
+(defn param-node [type name]
+  {::ast/kind ::param
+   ::ast/children []
+   ::type type
+   ::name name})
+
+(def parse-nonempty-params
+  (p/p-let
+   [first (p/p-let [t type/parse
+                    i (token ::lex/identifier)]
+                   (param-node t (::lex/source-string i)))
+    rest (p/many (p/p-let
+                  [_ (token ::lex/comma)
+                   t type/parse
+                   i (token ::lex/identifier)]
+                  (param-node t (::lex/source-string i))))]
+   (into [first] rest)))
+
+(def parse-params
+  (p/p-let
+   [args (p/maybe parse-nonempty-params)]
+   (if (nil? args)
+     []
+     args)))
+
+(p/defrule top/toplevel ::function-def
+  [t type/parse
+   name (token ::lex/identifier)
+   _ (token ::lex/left-parentheses)
+   params parse-params
+   _ (token ::lex/right-parentheses)
+   body block/parse-block]
+  {::ast/kind ::function-def
+   ::ast/children [::body ::params]
+   ::name (::lex/source-string name)
+   ::body body
+   ::params params
+   ::ret-type t})
+
+(defn all-flows-contain-return [def]
+  (let [flows (stmt/minimal-flow-paths (::body def))]
+    (every? #(some is-return %) flows)))
+
+(defmethod ast/pretty-print ::function-def [def]
+  (str (::ret-type def)
+       " "
+       (::name def)
+       "("
+       (str/join ", " (map #(str (::type %) " " (::name %))
+                           (::params def)))
+       ")\n"
+       (ast/pretty-print (::body def))
+       "\n\n"))
+
+(defmethod top/collect-names ::function-def [def env]
+  (let [name (::name def)
+        id (id/make-var)
+        type {::args (mapv ::type (::params def))
+              ::return (::ret-type def)}]
+    [(assoc def ::id id)
+     (assoc env
+            ::names (assoc (::names env) name id)
+            ::types (assoc (::types env) id type))]))
+
+(defmethod name/resolve-names-stmt ::function-def [def env]
+  (let [[new-params env] (loop [env env
+                                new-params []
+                                params (::params def)]
+                           (if (empty? params) [new-params env]
+                               (let [p (first params)
+                                     [p e] (var/declare-var (::name p) p env)]
+                                 (recur e
+                                        (conj new-params p)
+                                        (rest params)))))
+        [new-body _] (name/resolve-names-stmt (::body def) env)]
+    [(assoc def
+            ::body new-body
+            ::params new-params)
+     env]))
+
+(defmethod stmt/typecheck ::function-def [def env]
+  (let [env (assoc env ::ret-type (::ret-type def))
+        env (reduce (fn [env param]
+                      (var/declare-var-type param (::type param) env))
+                    env (::params def))
+        [new-body _] (stmt/typecheck (::body def) env)]
+    [(assoc def
+            ::body new-body)
+     env]))
+
+(defmethod name/check-initialization-stmt ::function-def [def env]
+  (let [env (reduce (fn [env param]
+                      (name/initialize (::var/id param) env))
+                    env (::params def))
+        [body env] (name/check-initialization-stmt (::body def) env)
+        has-return (all-flows-contain-return def)
+        def (if-not has-return
+              (err/add-error def (err/make-semantic-error (str "missing return statement in function " (::name def))))
+              def)]
+    [(assoc def
+            ::body body)
+     env]))
+
+(defmethod top/to-ir ::function-def [def]
+  {::ir/kind ::ir/fun
+   ::ir/name (::id def)
+   ::ir/params (map ::var/id (::params def))
+   ::ir/body (stmt/to-ir (::body def))})
+
+(defn is-main [def]
+  (= "main" (::name def)))
+

@@ -14,6 +14,7 @@
             [compiler.frontend.intcomp :as intcomp]
             [compiler.frontend.while :as while]
             [compiler.frontend.for :as for]
+            [compiler.frontend.toplevel :as top]
             [compiler.frontend.function :as fun]
             [compiler.frontend.block :as block]
             [compiler.frontend.common.namespace :as name]
@@ -25,113 +26,63 @@
   (fn [tok]
     (= (::lex/kind tok) kind)))
 
-(p/defrule stmt/parse-statement ::return
-  [_ (token ::lex/return)
-   ret-expr expr/parse-expr
-   _ (token ::lex/semicolon)]
-  {::ast/kind ::return
-   ::ast/children [::ret-expr]
-   ::ret-expr ret-expr})
-
-(defmethod ast/pretty-print ::return [ret]
-  (str "return " (ast/pretty-print (::ret-expr ret))))
-
-(defmethod name/resolve-names-stmt ::return [ret env]
-  [(assoc ret
-          ::ret-expr (name/resolve-names-expr (::ret-expr ret) env))
-   env])
-
-(defmethod stmt/to-ir ::return [ret]
-  (conj
-   (expr/to-ir (::ret-expr ret) ::ir/ret-register)
-   [::ir/return]))
-
-(defmethod stmt/typecheck ::return [ret env]
-  (let [decl-type (env ::ret-type)
-        new-expr (expr/typecheck (::ret-expr ret) env)
-        actual-type (::type/type new-expr)
-        new-ret (assoc ret ::ret-expr new-expr)]
-    [(if (type/equals decl-type actual-type)
-       new-ret
-       (err/add-error new-ret (err/make-semantic-error (str "type mismatch. should return " decl-type " but returns " actual-type))))
-     env]))
-
-(defmethod stmt/minimal-flow-paths ::return [ret]
-  [[ret]])
-
-(defmethod name/check-initialization-stmt ::return [ret env]
-  (let [expr (name/check-initialization-expr (::ret-expr ret) env)
-        env (assoc env
-                   ::name/initialized (set/union (::name/initialized env)
-                                                 (::name/defined env)))]
-    [(assoc ret ::ret-expr expr)
-     env]))
-
-(defmethod stmt/ends-flow ::return [_] true)
-
-(defmulti is-return ::ast/kind)
-(defmethod is-return ::return [_] true)
-(defmethod is-return :default [_] false)
-
-
 (def program-parser
   (p/p-let
-   [_ (token ::lex/int)
-    _ (fn [tok] (and (= (::lex/kind tok) ::lex/identifier)
-                     (= (::lex/source-string tok) "main")))
-    _ (token ::lex/left-parentheses)
-    _ (token ::lex/right-parentheses)
-    body block/parse-block
+   [decls (p/many top/toplevel)
     _ (p/end-of-file)]
    {::ast/kind ::program
-    ::ast/children [::body]
-    ::body body
-    ::ret-type int/int-type}))
+    ::ast/children [::decls]
+    ::decls decls}))
 
-(defn take-throughv
-  "like take while, but also includes the first element where the predicate does not hold"
-  [pred coll]
-  (loop [coll coll
-         res []]
-    (cond
-      (empty? coll) res
-      (pred (first coll)) (recur (rest coll)
-                                 (conj res (first coll)))
-      :else (conj res (first coll)))))
+(defn thread-env-through [mapper decls env]
+  (loop [decls decls
+         new-decls []
+         env env]
+    (if (empty? decls)
+      [new-decls env] 
+      (let [[d e] (mapper (first decls) env)]
+        (recur (rest decls)
+               (conj new-decls d)
+               e)))))
+
+(defn >>> [decls env mappers] 
+  (if (empty? mappers)
+    [decls env]
+    (let [[d e] (thread-env-through (first mappers) decls env)]
+      (recur d e (rest mappers)))))
 
 
-(defn build-ast [source-str]
+(defn frontend [source-str]
   (let [tokens (lex/lex source-str)
-        prog (p/run program-parser tokens)
-        ret-type (::ret-type prog)]
-    ;(println "source str: " source-str)
-    ;(println "tokens: " (map ::lex/kind tokens))
+        prog (p/run program-parser tokens)]
     (cond
       (some err/has-error? tokens)
-      {::code nil
+      {::decls nil
        ::errors #{(err/make-parser-error "illegal token detected")}}
 
       (::p/success prog)
-      (let [env (fun/setup-env (assoc var/default-env ::ret-type int/int-type))
-            body (::body (::p/value prog))
-            body (ast/check-after-parse body)
-            [body env] (name/resolve-names-stmt body env)
-            [body env] (stmt/typecheck body env)
-            [body _] (name/check-initialization-stmt body (name/init-default-env))
-            flows (stmt/minimal-flow-paths body)
-            all-flows-contain-return (every? #(some is-return %) flows)]
-        ;(println "flows-to-return: " (map #(mapv ast/pretty-print %) flows-up-to-return))  
-        {::code body
-         ::errors (if-not all-flows-contain-return
-                    #{(err/make-semantic-error "missing return statement")}
-                    nil)})
+      (let [env (name/init-env (fun/setup-env (assoc var/default-env ::ret-type int/int-type)))
+            decls (::decls (::p/value prog))
+            decls (map ast/check-after-parse decls)
+            [decls env] (>>> decls env
+                             [top/collect-names
+                              name/resolve-names-stmt
+                              stmt/typecheck
+                              name/check-initialization-stmt])
+            main (first (filter fun/is-main decls)) 
+            errs (apply clojure.set/union (map ast/collect-errors decls))
+            errs (if-not main (conj errs (err/make-semantic-error "missing main function"))
+                         errs)]
+        {::decls decls
+         ::main-id (::fun/id main)
+         ::errors errs})
 
       :else
-      {::code nil
+      {::decls nil
        ::errors #{(err/make-parser-error "unknown fatal parser error")}})))
 
-(defn to-ir [ast]
-  (stmt/to-ir ast))
+(defn to-ir [decls]
+  (into [] (map top/to-ir decls)))
 
 ;only support call as expression statement
 (defmethod ast/check-after-parse ::expr/expr-stmt [e]

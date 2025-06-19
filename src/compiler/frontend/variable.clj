@@ -64,32 +64,46 @@
 (defmethod ast/pretty-print ::declare [decl]
   (str "int " (::name decl) (if (::value decl) (str " = " (ast/pretty-print (::value decl))) "") ";"))
 
-(defmethod name/resolve-names-stmt ::declare [decl env]
+(defn declare-var
+  "declares name in the env.
+   adds the ::id to node
+   if already declared, adds an error to node
+   returns [new-node new-env]"
+  [name node env]
   (let [id (id/make-var)
-        name (::name decl)
+        new-node (assoc node
+                        ::id id)
+        new-node (if ((::declared env) name)
+                   (err/add-error new-node (err/make-semantic-error (str "variable " name " is already declared.")))
+                   new-node)
+        new-env (assoc-in
+                 (assoc-in env [::names name] id)
+                 [::declared name] true)]
+    [new-node new-env]))
+
+(defmethod name/resolve-names-stmt ::declare [decl env]
+  (let [[decl env] (declare-var (::name decl) decl env)
         new-decl (assoc decl
-                        ::id id
                         ::value (if (::value decl)
                                   (name/resolve-names-expr (::value decl) env)
                                   nil))]
-    [(if ((::declared env) name)
-       (err/add-error new-decl (err/make-semantic-error (str "variable " name " is already declared.")))
-       new-decl)
-     (assoc-in
-      (assoc-in env [::names name] id)
-      [::declared name] true)]))
+    [new-decl
+     env]))
 
 (defmethod stmt/to-ir ::declare [decl]
   (if (::value decl)
     (expr/to-ir (::value decl) (::id decl))
     []))
 
+(defn declare-var-type [node type env]
+  (assoc-in env [::types (::id node)] type))
+
 (defmethod stmt/typecheck ::declare [decl env]
   (let [new-val (if (::value decl)
                   (expr/typecheck (::value decl) env)
                   (::value decl))
         type (::type/type decl)
-        new-env (assoc-in env [::types (::id decl)] type)
+        new-env (declare-var-type decl type env)
         decl (assoc decl ::value new-val)
         new-decl (if (or (not new-val) (type/equals type (::type/type new-val)))
                    decl
@@ -103,7 +117,6 @@
   (let [value (if (::value decl)
                 (name/check-initialization-expr (::value decl) env)
                 (::value decl))
-        env (name/define (::id decl) env)
         env (if value
               (name/initialize (::id decl) env)
               env)]

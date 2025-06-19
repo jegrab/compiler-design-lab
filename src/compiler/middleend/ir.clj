@@ -10,32 +10,13 @@
 ; rval is constant or var or [op params...]
 ; [::assign var r-val]
 
-(def start
-  [".global my_main"
-   ".text"
-   
-   "my_main:"])
 
-(defmulti get-res-var-name first)
-(defmethod get-res-var-name ::assign [[assign dest input]] dest)
-(defmethod get-res-var-name :default [_] nil)
-
-(defn enumerate-vars [ir-vec]
-  (let [var-set (into #{} (map get-res-var-name ir-vec))
-        with-nums (map (fn [var id] [var id]) var-set (drop 1 (range)))]
-    (into {} with-nums)))
 
 (defmulti codegen (fn [instr var-ids] (first instr)))
+(defmulti toplevel (fn [spec] (::kind spec)))
 
 (defn read-stack [offset]
   (str " -" offset "(%rbp)"))
-
-(defmethod codegen ::return [ret var-ids]
-  [(str "movl " (read-stack (* 4 (var-ids ::ret-register)))  ", %eax")
-   "movslq %eax, %rdi #return"
-   "leave             #|"
-   "ret               #|"
-   ""])
 
 (defmethod codegen ::nop [[nop] var-ids]
   [(str "nop")])
@@ -110,9 +91,33 @@
       :else
       (recur (conj res (str "push "
                             (read-stack (* 4 (var-ids (first tmps))))))
-             count-done
+             (inc count-done)
              (inc put-on-stack)
              (rest tmps)))))
+
+(defn read-args [params var-ids]
+  (loop [res []
+         count-done 0
+         got-from-stack 0
+         params params]
+    (cond 
+      (empty? params)
+      res
+      
+      (< count-done (count param-register-sequence))
+      (recur (conj res (str "movl %"
+                            (nth param-register-sequence count-done)
+                            ", "
+                            (read-stack (* 4 (var-ids (first params))))))
+             (inc count-done)
+             got-from-stack
+             (rest params))
+      
+      :else
+      (recur (conj res (str "movl +" (* 4 (inc got-from-stack)) "(%rbp)"))
+             (inc count-done)
+             (inc got-from-stack)
+             (rest params)))))
 
 (defn codegen-assign-call [[call fun-id & tmps] dest-offset var-ids]
   (let [[put-args-code additional-stack-size] (put-args tmps var-ids)]
@@ -121,6 +126,41 @@
      [(str "call " (fun-id-to-sym fun-id))
       (str "add $" additional-stack-size ", %rsp")
       (str "movl %eax, " (read-stack dest-offset))])))
+
+(defmethod codegen ::return [ret var-ids]
+  [(str "movl " (read-stack (* 4 (var-ids ::ret-register)))  ", %eax")
+   "movslq %eax, %rdi #return"
+   "leave             #|"
+   "ret               #|"
+   ""])
+
+(defn align-to-16-bytes [needed-bytes]
+  (let [rem (rem needed-bytes 16)]
+    (if (zero? rem)
+      needed-bytes
+      (+ needed-bytes (- 16 rem)))))
+
+(defmulti get-res-var-name first)
+(defmethod get-res-var-name ::assign [[assign dest input]] dest)
+(defmethod get-res-var-name :default [_] nil)
+
+(defn enumerate-vars [ir-vec params]
+  (let [var-set (into #{} (concat params (map get-res-var-name ir-vec)))
+        with-nums (map (fn [var id] [var id]) var-set (drop 1 (range)))]
+    (into {} with-nums)))
+
+(defmethod toplevel ::fun [{name ::name
+                            params ::params
+                            body ::body}]
+  (let [var-ids (enumerate-vars body params)
+        fun-name [(str (fun-id-to-sym name) ":")]
+        stack-bytes (align-to-16-bytes (* 4 (count var-ids)))
+        make-stack ["pushq %rbp"
+                    "movq %rsp, %rbp"
+                    (str "subq $" stack-bytes ", %rsp")]
+        args (read-args params var-ids)
+        body-asm (apply concat (map #(codegen % var-ids) body))]
+    (into [] (concat fun-name make-stack args body-asm))))
 
 (def print-code
   [(str (fun-id-to-sym :print) ":")
@@ -235,21 +275,21 @@
            (= ::call (first input)))
       (codegen-assign-call input dest-offset var-ids))))
 
-(defn align-to-16-bytes [needed-bytes]
-  (let [rem (rem needed-bytes 16)]
-    (if (zero? rem)
-      needed-bytes
-      (+ needed-bytes (- 16 rem)))))
-
-(defn make-code [instrs]
-  (let [num-vars (enumerate-vars instrs)
-        asm-lines (apply concat (map #(codegen % num-vars) instrs))
+(defn make-code [decls main-id]
+  (let [decl-asm (apply concat (map toplevel decls))
         preamble (concat print-code read-code flush-code)
-        before start
-        stack-bytes (align-to-16-bytes (* 4 (count (enumerate-vars instrs))))
-        make-stack ["pushq %rbp"
-                    "movq %rsp, %rbp"
-                    (str "subq $" stack-bytes ", %rsp")]
+        before [".global my_main"
+                ".text"
+                "\n"
+                "my_main:"
+                "pushq %rbp"
+                "movq %rsp, %rbp"
+                (str "call " (fun-id-to-sym main-id))
+                "leave"
+                "ret"
+                "\n"
+                "\n"]
+
         after ["\n"]
-        whole (concat preamble before make-stack asm-lines after)]
+        whole (concat preamble before decl-asm after)]
     (clojure.string/join "\n" whole)))

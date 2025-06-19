@@ -7,7 +7,7 @@
 (defmethod resolve-names-expr :default [ast env]
   (loop [ast ast
          cs (::ast/children ast)]
-    
+
     (if (empty? cs)
       ast
       (do
@@ -35,7 +35,7 @@
 
 (defmulti check-initialization-stmt (fn [ast env] (::ast/kind ast)))
 
-(defn init-default-env [] {::defined #{} ::initialized #{}})
+(defn init-env [env] (assoc env ::defined #{} ::initialized #{}))
 (defn define [id env]
   (assoc env ::defined (conj (::defined env) id)))
 (defn initialize [id env]

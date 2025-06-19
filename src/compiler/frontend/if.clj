@@ -95,9 +95,6 @@
                               [(::else if) env])
         new-env (assoc env 
                        ::name/initialized (set/intersection (::name/initialized then-env) (::name/initialized else-env)))]
-    (println "before env:" env)
-    (println "then-env:" then-env "\n\n else env: " else-env)
-    (println "new env:" new-env)
     [(assoc if
             ::then new-then
             ::else new-else)
