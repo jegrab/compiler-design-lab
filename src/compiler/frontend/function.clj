@@ -97,13 +97,15 @@
        (str/join ", " (map ast/pretty-print (::args call))) ")"))
 
 (defmethod name/resolve-names-expr ::call [call env]
-  (cond
-    (not ((::names env) (::function-name call)))
-    (err/add-error call (err/make-semantic-error (str "calling unknown function " (::function-name call))))
+  (let [call (assoc call ::args
+                    (mapv #(name/resolve-names-expr % env) (::args call)))]
+    (cond
+      (not ((::names env) (::function-name call)))
+      (err/add-error call (err/make-semantic-error (str "calling unknown function " (::function-name call))))
 
-    :else
-    (assoc call
-           ::fun-id ((::names env) (::function-name call)))))
+      :else
+      (assoc call
+             ::fun-id ((::names env) (::function-name call))))))
 
 (defmethod expr/typecheck ::call [call env]
   (let [fun-type ((::types env) (::fun-id call))
