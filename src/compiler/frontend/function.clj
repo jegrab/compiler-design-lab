@@ -313,3 +313,18 @@
 (defn is-main [def]
   (= "main" (::name def)))
 
+(defn check-main [def env]
+  (if-not (is-main def)
+    [def env]
+    (let [ret-type (::ret-type def)
+          params (::params def)
+          errs #{}
+          errs (if-not (empty? params)
+                 (conj errs (err/make-semantic-error (str "main must not have any paramters, but is declared with " (count params) " parameters."))
+                       errs)
+                 errs)
+          errs (if-not (type/equals ret-type int/int-type)
+                 (conj errs (err/make-semantic-error (str "main must return " int/int-type ", but returns " ret-type "."))
+                       errs)
+                 errs)]
+      [(err/add-errors def errs) env])))
