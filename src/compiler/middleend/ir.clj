@@ -76,7 +76,7 @@
       [res (* 8 put-on-stack)]
       
       (empty? tmps)
-      (recur (conj res "pushq $0")
+      (recur (conj res "push $0")
              count-done
              (inc put-on-stack)
              tmps)
@@ -96,31 +96,32 @@
              (rest tmps)))))
 
 (defn read-args [params var-ids]
-  (loop [res []
-         count-done 0
-         got-from-stack 0
-         params params]
-    (cond 
-      (empty? params)
-      res
-      
-      (< count-done (count param-register-sequence))
-      (recur (conj res (str "movl %"
-                            (nth param-register-sequence count-done)
-                            ", "
-                            (read-stack (* 4 (var-ids (first params))))))
-             (inc count-done)
-             got-from-stack
-             (rest params))
-      
-      :else
-      (recur (into res [(str "movl " (* 4 (inc got-from-stack)) "(%rbp)"
-                             ", "
-                             "%eax")
-                        (str "movl %eax, " (read-stack (* 4 (var-ids (first params)))))])
-             (inc count-done)
-             (inc got-from-stack)
-             (rest params)))))
+  (let [from-stack (- (count params) (count param-register-sequence))]
+    (loop [res []
+           count-done 0
+           got-from-stack from-stack
+           params params]
+      (cond
+        (empty? params)
+        res
+
+        (< count-done (count param-register-sequence))
+        (recur (conj res (str "movl %"
+                              (nth param-register-sequence count-done)
+                              ", "
+                              (read-stack (* 4 (var-ids (first params))))))
+               (inc count-done)
+               got-from-stack
+               (rest params))
+
+        :else
+        (recur (into res [(str "movl " (* 8 (+ 2 got-from-stack)) "(%rbp)"
+                               ", "
+                               "%eax")
+                          (str "movl %eax, " (read-stack (* 4 (var-ids (first params)))))])
+               (inc count-done)
+               (dec got-from-stack)
+               (rest params))))))
 
 (defn codegen-assign-call [[call fun-id & tmps] dest-offset var-ids]
   (let [[put-args-code additional-stack-size] (put-args tmps var-ids)]
