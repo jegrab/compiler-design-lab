@@ -117,6 +117,7 @@
   (let [value (if (::value decl)
                 (name/check-initialization-expr (::value decl) env)
                 (::value decl))
+        env (name/define (::id decl) env)
         env (if value
               (name/initialize (::id decl) env)
               env)]
