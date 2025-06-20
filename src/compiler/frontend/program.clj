@@ -70,7 +70,7 @@
                               stmt/typecheck
                               name/check-initialization-stmt
                               fun/check-main])
-            main (first (filter fun/is-main decls)) 
+            main (first (filter fun/is-main decls))
             errs (apply clojure.set/union (map ast/collect-errors decls))
             errs (if-not main (conj errs (err/make-semantic-error "missing main function"))
                          errs)]

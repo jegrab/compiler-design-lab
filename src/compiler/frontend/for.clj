@@ -35,7 +35,6 @@
     (err/add-error break (err/make-semantic-error "break outside of loop"))
     break))
 (defmethod stmt/to-ir ::break [_] [[::ir/goto dyn-label-end]])
-(defmethod stmt/minimal-flow-paths ::break [break] [[break]])
 (defmethod stmt/ends-flow ::break [_] true)
 (defmethod name/check-initialization-stmt ::break [ret env]
   [ret
@@ -56,7 +55,6 @@
     (err/add-error c (err/make-semantic-error "continue outside of loop"))
     c))
 (defmethod stmt/to-ir ::continue [_] [[::ir/goto dyn-label-cont]])
-(defmethod stmt/minimal-flow-paths ::continue [cont] [[cont]])
 (defmethod stmt/ends-flow ::continue [_] true)
 (defmethod name/check-initialization-stmt ::continue [cont env]
   [cont
@@ -143,21 +141,6 @@
                 (if (::step for) (stmt/to-ir (::step for)) [])
                 [[::ir/goto label-start]
                  [::ir/target label-end]])))))
-
-(defmethod stmt/minimal-flow-paths ::for [for]
-  (let [init (if (::init for)
-               [(::init for)]
-               [])
-        test {::ast/children [::test]
-              ::test (::test for)}
-        body-paths (stmt/minimal-flow-paths (::body for))
-        body-paths (map (fn [path] (take-while #(not (#{::continue ::break} (::ast/kind %))) path))
-                        body-paths)
-        step (if (::step for)
-               [(::step for)]
-               [])
-        body-with-stuff-parts (mapv #(into [] (concat init test % step)) body-paths)]
-    (conj body-with-stuff-parts init)))
 
 (defmethod name/check-initialization-stmt ::for [for env]
   (let [[init env] (if (::init for)

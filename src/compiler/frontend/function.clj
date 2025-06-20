@@ -182,8 +182,7 @@
        (err/add-error new-ret (err/make-semantic-error (str "type mismatch. should return " decl-type " but returns " actual-type))))
      env]))
 
-(defmethod stmt/minimal-flow-paths ::return [ret]
-  [[ret]])
+(defmethod stmt/returns ::return [_] true)
 
 (defmethod name/check-initialization-stmt ::return [ret env]
   (let [expr (name/check-initialization-expr (::ret-expr ret) env)
@@ -194,12 +193,6 @@
      env]))
 
 (defmethod stmt/ends-flow ::return [_] true)
-
-(defmulti is-return ::ast/kind)
-(defmethod is-return ::return [_] true)
-(defmethod is-return :default [_] false)
-
-
 
 (defn param-node [type name]
   {::ast/kind ::param
@@ -239,10 +232,6 @@
    ::body body
    ::params params
    ::ret-type t})
-
-(defn all-flows-contain-return [def]
-  (let [flows (stmt/minimal-flow-paths (::body def))]
-    (every? #(some is-return %) flows)))
 
 (defmethod ast/pretty-print ::function-def [def]
   (str (::ret-type def)
@@ -299,7 +288,7 @@
                       (name/initialize (::var/id param) env))
                     env (::params def))
         [body env] (name/check-initialization-stmt (::body def) env)
-        has-return (all-flows-contain-return def)
+        has-return (stmt/returns (::body def))
         def (if-not has-return
               (err/add-error def (err/make-semantic-error (str "missing return statement in function " (::name def))))
               def)]

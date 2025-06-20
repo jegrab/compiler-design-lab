@@ -19,12 +19,8 @@
 
 (defmulti to-ir (fn [stmt] (::ast/kind stmt)))
 
-(defmulti minimal-flow-paths 
-  "returns a seq of all minimal control flow paths.
-   e.g. for if-then-else both branches
-   but for loops only the empty sequence.
-   Each path is a vector of statements."
-  (fn [stmt] (::ast/kind stmt)))
+(defmulti returns ::ast/kind)
+(defmethod returns :default [_] false)
 
 (defmulti ends-flow ::ast/kind)
 (defmethod ends-flow :default [_] false)

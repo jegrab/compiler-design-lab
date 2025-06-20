@@ -55,8 +55,6 @@
   [(assoc e ::expr (typecheck (::expr e) env))
    env])
 
-(defmethod stmt/minimal-flow-paths ::expr-stmt [e] [[e]])
-
 (defmethod name/check-initialization-stmt ::expr-stmt [e env]
   [(assoc e ::expr (name/check-initialization-expr (::expr e) env))
    env])

@@ -81,12 +81,8 @@
                 [])
               [[::ir/target label-end]]))))
 
-(defmethod stmt/minimal-flow-paths ::if [if]
-  (if (::else if)
-    (into (stmt/minimal-flow-paths (::then if))
-          (stmt/minimal-flow-paths (::else if)))
-    (into (stmt/minimal-flow-paths (::then if))
-          [[]])))
+(defmethod stmt/returns ::if [if]
+  (and (stmt/returns (::then if)) (stmt/returns (::else if))))
 
 (defmethod name/check-initialization-stmt ::if [if env]
   (let [[new-then then-env] (name/check-initialization-stmt (::then if) env)

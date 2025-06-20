@@ -110,9 +110,6 @@
                    (err/add-error decl (err/make-semantic-error (str "type mismatch. declared: " type " actual: " (::type/type new-val)))))]
     [new-decl new-env]))
 
-(defmethod stmt/minimal-flow-paths ::declare [decl]
-  [[decl]])
-
 (defmethod name/check-initialization-stmt ::declare [decl env]
   (let [value (if (::value decl)
                 (name/check-initialization-expr (::value decl) env)
@@ -172,9 +169,6 @@
                      assign
                      (err/add-error assign (err/make-semantic-error (str "type mismatch. left: " (::type/type new-l-v) " right: " (::type/type new-expr)))))]
     [new-assign env]))
-
-(defmethod stmt/minimal-flow-paths ::assign [assign]
-  [[assign]])
 
 (defmethod name/check-initialization-stmt ::assign [assign env]
   (let [expr (name/check-initialization-expr (::expr assign) env)
