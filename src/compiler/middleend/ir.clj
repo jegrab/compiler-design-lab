@@ -115,7 +115,7 @@
                (rest params))
 
         :else
-        (recur (into res [(str "movl " (* 8 (+ 2 got-from-stack)) "(%rbp)"
+        (recur (into res [(str "movl " (* 8 (+ (if (even? from-stack) 1 2) got-from-stack)) "(%rbp)"
                                ", "
                                "%eax")
                           (str "movl %eax, " (read-stack (* 4 (var-ids (first params)))))])
