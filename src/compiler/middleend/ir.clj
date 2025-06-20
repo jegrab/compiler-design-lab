@@ -114,7 +114,10 @@
              (rest params))
       
       :else
-      (recur (conj res (str "movl +" (* 4 (inc got-from-stack)) "(%rbp)"))
+      (recur (into res [(str "movl " (* 4 (inc got-from-stack)) "(%rbp)"
+                             ", "
+                             "%eax")
+                        (str "movl %eax, " (read-stack (* 4 (var-ids (first params)))))])
              (inc count-done)
              (inc got-from-stack)
              (rest params)))))
