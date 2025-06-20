@@ -259,7 +259,10 @@
   (let [name (::name def)
         id (id/make-var)
         type {::args (mapv ::type (::params def))
-              ::return (::ret-type def)}]
+              ::return (::ret-type def)}
+        redef? ((::names env) (::name def))
+        def (if redef? (err/add-error def (err/make-semantic-error (str "function " (::name def) " is allready defined")))
+                def)] 
     [(assoc def ::id id)
      (assoc env
             ::names (assoc (::names env) name id)
