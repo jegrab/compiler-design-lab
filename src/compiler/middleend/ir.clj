@@ -171,6 +171,7 @@
    "pushq %rbp"
    "movq %rsp, %rbp"
    "call putchar"
+   "movl $0, %eax"
    "leave"
    "ret"
    ""])
@@ -190,6 +191,7 @@
    "movq %rsp, %rbp"
    "movq stdout(%rip), %rdi"
    "call fflush"
+   "movl $0, %eax"
    "leave"
    "ret"
    ""])
