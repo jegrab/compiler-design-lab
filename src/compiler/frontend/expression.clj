@@ -9,7 +9,6 @@
    [compiler.frontend.common.error :as err]
    [compiler.frontend.common.id :as id]
    [compiler.frontend.statement :as stmt]
-   [compiler.middleend.ir :as ir]
    [compiler.frontend.common.namespace :as name]))
 
 (s/def ::kind keyword?)

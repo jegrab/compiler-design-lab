@@ -8,7 +8,7 @@
             [compiler.frontend.common.namespace :as name]
             [compiler.frontend.common.id :as id]
             [compiler.frontend.common.type :as type]
-            [compiler.middleend.ir :as ir]))
+            [compiler.middleend.oldir :as ir]))
 
 (defn- token [kind]
   (fn [tok]

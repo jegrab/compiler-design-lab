@@ -18,9 +18,7 @@
             [compiler.frontend.function :as fun]
             [compiler.frontend.block :as block]
             [compiler.frontend.common.namespace :as name]
-            [compiler.middleend.ir :as ir]
-            [compiler.frontend.common.error :as err]
-            [compiler.frontend.common.type :as type]))
+            [compiler.frontend.common.error :as err]))
 
 (defn- token [kind]
   (fn [tok]

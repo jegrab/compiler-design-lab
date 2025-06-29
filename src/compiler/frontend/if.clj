@@ -9,7 +9,7 @@
             [compiler.frontend.common.namespace :as name]
             [compiler.frontend.expression :as expr]
             [compiler.frontend.statement :as stmt]
-            [compiler.middleend.ir :as ir]
+            [compiler.middleend.oldir :as ir]
             [compiler.frontend.bool :as bool]))
 
 (defn- token [kind]

@@ -6,7 +6,7 @@
             [compiler.frontend.common.error :as err]
             [compiler.frontend.common.type :as type]
             [compiler.frontend.expression :as expr]
-            [compiler.middleend.ir :as ir]))
+            [compiler.middleend.oldir :as ir]))
 
 (def bool-type (type/simple-type ::bool))
 

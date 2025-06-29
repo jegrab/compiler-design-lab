@@ -8,7 +8,7 @@
             [compiler.frontend.expression :as expr]
             [compiler.frontend.bool :as bool]
             [compiler.frontend.integer :as int]
-            [compiler.middleend.ir :as ir]))
+            [compiler.middleend.oldir :as ir]))
 
 
 (defn- token [kind]

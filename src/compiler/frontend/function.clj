@@ -12,7 +12,7 @@
    [compiler.frontend.block :as block]
    [compiler.frontend.common.namespace :as name]
    [compiler.frontend.expression :as expr]
-   [compiler.middleend.ir :as ir]
+   [compiler.middleend.oldir :as ir]
    [compiler.frontend.integer :as int]
    [compiler.frontend.statement :as stmt]))
 

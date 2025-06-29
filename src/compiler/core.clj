@@ -4,7 +4,7 @@
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.ast :as ast]
             [compiler.frontend.statement :as stmt]
-            [compiler.middleend.ir :as ir])
+            [compiler.middleend.oldir :as ir])
   (:gen-class))
 
 (defn- exit-illegal-arguments []

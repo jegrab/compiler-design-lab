@@ -11,7 +11,7 @@
             [compiler.frontend.common.type :as type]
             [compiler.frontend.common.error :as err]
             [compiler.frontend.common.id :as id]
-            [compiler.middleend.ir :as ir]))
+            [compiler.middleend.oldir :as ir]))
 
 (defn- token [kind]
   (fn [tok]
