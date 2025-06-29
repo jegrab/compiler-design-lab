@@ -10,6 +10,7 @@
 (defmulti codegen
   "generates a list of strings. each string is a line of assembly.
    location-mapper is  a function that takes an identifier and returns a location.
+   an integer literal can also be instead of an identifier and represents a location that stores that literal identifier (but can not be written to).
    the identifier ::helper returns a register that is not used by any other identifier.
    A location is a map of form {::kind kind ::size bytes} with additional fields depending on the kind
    where kind is something like ::register or ::stack
@@ -19,6 +20,9 @@
 (defmulti memory? (fn [loc] (::kind loc)))
 (defmethod memory? :default [_] false)
 (defmethod memory? ::memory [reg] true)
+
+(defn not-both-memory [a b]
+  (not (and (memory? a) (memory? b))))
 
 (defn size-suffix [loc]
   (case (::size loc)
@@ -91,5 +95,8 @@
 (defn move [a target] {::kind ::move ::a a ::target target})
 (defmethod codegen ::move [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
-        t-loc (loc-mapper (::target instr))]
-   [(str "mov" (size-suffix a-loc) " " (read-location a-loc) ", " (read-location t-loc))]))
+        t-loc (loc-mapper (::target instr))
+        h-loc (loc-mapper ::helper)]
+    (if (not-both-memory a-loc bit-shift-left)
+      [(str "mov" (size-suffix a-loc) " " (read-location a-loc) ", " (read-location t-loc))]
+      [(str "mov" (size-suffix a-loc) "")])))

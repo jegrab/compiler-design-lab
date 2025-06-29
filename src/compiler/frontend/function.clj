@@ -12,7 +12,9 @@
    [compiler.frontend.block :as block]
    [compiler.frontend.common.namespace :as name]
    [compiler.frontend.expression :as expr]
-   [compiler.middleend.oldir :as ir]
+   [compiler.middleend.oldir :as oldir]
+   [compiler.middleend.ir :as ir]
+   [compiler.middleend.jump :as jump-ir]
    [compiler.frontend.integer :as int]
    [compiler.frontend.statement :as stmt]))
 
@@ -147,7 +149,7 @@
         code (into [] (apply concat (map first tmps-with-code)))
         tmps (map second tmps-with-code)]
     (conj code
-          [::ir/assign res (into [::ir/call (::fun-id call)]
+          [::oldir/assign res (into [::oldir/call (::fun-id call)]
                                  tmps)])))
 
 
@@ -168,9 +170,10 @@
    env])
 
 (defmethod stmt/to-ir ::return [ret]
-  (conj
-   (expr/to-ir (::ret-expr ret) ::ir/ret-register)
-   [::ir/return]))
+  (let [tmp (id/make-tmp)]
+    (into
+     (expr/to-ir (::ret-expr ret) tmp)
+     (jump-ir/return tmp))))
 
 (defmethod stmt/typecheck ::return [ret env]
   (let [decl-type (env ::ret-type)

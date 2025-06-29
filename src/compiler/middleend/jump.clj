@@ -45,3 +45,16 @@
         test-loc-code (ir/read-location test-loc)]
     [(str "cmp $0, " test-loc-code)
      (str "je " (id-to-sym (::target-label instr)))]))
+
+(defn return [ret-value-loc]
+  {::ir/kind ::return
+   ::a ret-value-loc})
+
+(defmethod ir/codegen ::return [instr loc-mapper]
+  (let [a-loc (loc-mapper (::a instr))
+        size (::ir/size a-loc)]
+    (when-not (= 32 size) (throw (Exception. "returning non 32 bit values not currently supported")))
+    [(str "movslq " (ir/read-location a-loc) ", %rdi")
+     "leave"
+     "ret"
+     ""]))

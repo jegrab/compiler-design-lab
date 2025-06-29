@@ -7,18 +7,16 @@
    ::b b
    ::target target})
 
-(defn- not-both-memory [a b]
-  (not (and (ir/memory? a) (ir/memory? b))))
+(defn un-op [kind a target]
+  {::ir/kind kind
+   ::a a
+   ::target target})
+
+
 
 (defn- make-code [asm-instr & operand-locs]
   (let [suffix (ir/size-suffix (first operand-locs))]
     (apply str asm-instr suffix " " (clojure.string/join ", " (map ir/read-location operand-locs)))))
-
-(defn- binop-node [kind a b target]
-  {::ir/kind kind
-   ::a a
-   ::b b
-   ::target target})
 
 (defn- codegen-commutative-binop [name instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
@@ -26,19 +24,14 @@
         t-loc (loc-mapper (::target instr))
         h-loc (loc-mapper ::ir/helper)]
     (cond
-      (and (= a-loc t-loc) (not-both-memory a-loc b-loc))
+      (and (= a-loc t-loc) (ir/not-both-memory a-loc b-loc))
       [(make-code name b-loc a-loc)]
-      (and (= b-loc t-loc) (not-both-memory a-loc b-loc))
+      (and (= b-loc t-loc) (ir/not-both-memory a-loc b-loc))
       [(make-code name a-loc b-loc)]
       :else
       [(make-code "mov" b-loc h-loc)
        (make-code name a-loc h-loc)
        (make-code "mov" h-loc t-loc)])))
-
-(defn- unop-node [kind a target]
-  {::ir/kind kind
-   ::a a
-   ::target target})
 
 (defn- codegen-unop [name instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
@@ -60,7 +53,7 @@
         t-loc (loc-mapper (::target instr))
         h-loc (loc-mapper ::ir/helper)]
     (cond
-      (and (= a-loc t-loc) (not-both-memory a-loc b-loc))
+      (and (= a-loc t-loc) (ir/not-both-memory a-loc b-loc))
       [(make-code "sub" b-loc a-loc)]
       :else
       [(make-code "mov" a-loc h-loc)
@@ -131,7 +124,7 @@
         t-loc (loc-mapper (::target instr))
         h-loc (loc-mapper ::ir/helper)]
     (cond
-      (and (= a-loc t-loc) (not-both-memory a-loc b-loc))
+      (and (= a-loc t-loc) (ir/not-both-memory a-loc b-loc))
       [(make-code name b-loc a-loc)] 
       :else
       [(make-code "mov" a-loc h-loc)

@@ -8,7 +8,7 @@
             [compiler.frontend.common.namespace :as name]
             [compiler.frontend.common.id :as id]
             [compiler.frontend.common.type :as type]
-            [compiler.middleend.oldir :as ir]))
+            [compiler.middleend.ir :as ir]))
 
 (defn- token [kind]
   (fn [tok]
@@ -40,8 +40,8 @@
 (defmethod expr/typecheck ::identifier [id env]
   (assoc id ::type/type (or ((::types env) (::id id)) type/unknown)))
 
-(defmethod expr/to-ir ::identifier [id into]
-  [[::ir/assign into (::id id)]])
+(defmethod expr/to-ir ::identifier [id target]
+  (ir/move (::id id) target))
 
 (defmethod name/check-initialization-expr ::identifier [id env]
   (if-not ((::name/initialized env) (::id id))
