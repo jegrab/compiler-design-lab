@@ -1,4 +1,6 @@
-(ns compiler.middleend.ir)
+(ns compiler.middleend.ir 
+  (:require
+    [compiler.middleend.ir :as ir]))
 
 ; instruction { ::kind ::assign ::dest name ::source name}
 ; 
@@ -20,13 +22,14 @@
 
 (defn size-suffix [loc]
   (case (::size loc)
+    8 "b"
     16 "w"
     32 "l"
     64 "q"))
 
-(defn int-loc-reg [reg-name]
+(defn loc-of-reg [reg-name size]
   {::kind ::register
-   ::size 32
+   ::size size
    ::name reg-name})
 
 (defmulti read-location
@@ -40,26 +43,30 @@
   (let [prefix (if (extra-register (::name loc))
                  "r"
                  (case (::size loc)
+                   8 ""
                    16 ""
                    32 "e"
                    64 "r"
                    (throw (Exception. (str "unsupported location size of " (::size loc) " bit")))))
         postfix (if (extra-register (::name loc))
                   (case (::size loc)
+                    8 "b"
                     16 "w"
                     32 "d"
                     64 ""
                     (throw (Exception. (str "unsupported location size of " (::size loc) " bit"))))
-                  "")
+                  (case (::size loc)
+                    8 "l"
+                    ""))
         reg-name (case (::name loc)
-                   ::accumulator "ax"
-                   ::base "bx"
-                   ::counter "cx"
+                   ::accumulator (if (= 8 (::size loc)) "a" "ax")
+                   ::base (if (= 8 (::size loc)) "b" "bx")
+                   ::counter (if (= 8 (::size loc)) "c" "cx")
                    ::stack-pointer "sp"
                    ::stack-base "bp"
                    ::destination-index "di"
                    ::source-index "si"
-                   ::data "dx"
+                   ::data (if (= 8 (::size loc)) "d" "dx")
                    ::reg-8 "8"
                    ::reg-9 "9"
                    ::reg-10 "10"
@@ -70,3 +77,19 @@
                    ::reg-15 "15"
                    (throw (Exception. (str "unknow register name " (::name loc)))))]
     (str "%" prefix reg-name postfix)))
+
+(defmulti special-register?
+  "takes a register name (keyword).
+   If the register can be used by the allocator for some purpose, returns false.
+   If true is returned, then some instruction uses the register for special purposes.
+   It then may overwrite the value of the register and thus the register should not be used by the allocator.
+   But it may be used as the ::helper register by the allocator."
+  identity)
+(defmethod special-register? :default [_] false)
+
+
+(defn move [a target] {::kind ::move ::a a ::target target})
+(defmethod codegen ::move [instr loc-mapper]
+  (let [a-loc (loc-mapper (::a instr))
+        t-loc (loc-mapper (::target instr))]
+   [(str "mov" (size-suffix a-loc) " " (read-location a-loc) ", " (read-location t-loc))]))
