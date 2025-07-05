@@ -15,3 +15,7 @@
   ([name]
    (swap! next-id inc)
    (str "label_" name "_" @next-id)))
+
+(defn make-id-num []
+  (swap! next-id inc)
+  @next-id)

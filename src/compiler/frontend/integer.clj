@@ -7,8 +7,7 @@
    [compiler.frontend.common.error :as err]
    [compiler.frontend.common.type :as type]
    [compiler.frontend.expression :as expr]
-   [compiler.middleend.ir :as ir]
-   [compiler.middleend.arithmetic :as arith-ir]))
+   [compiler.middleend.ir :as ir]))
 
 (def int-type (type/simple-type ::integer))
 

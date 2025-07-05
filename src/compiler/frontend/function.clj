@@ -13,8 +13,7 @@
    [compiler.frontend.common.namespace :as name]
    [compiler.frontend.expression :as expr]
    [compiler.middleend.oldir :as oldir]
-   [compiler.middleend.ir :as ir]
-   [compiler.middleend.jump :as jump-ir]
+   [compiler.middleend.ir :as ir] 
    [compiler.frontend.integer :as int]
    [compiler.frontend.statement :as stmt]))
 

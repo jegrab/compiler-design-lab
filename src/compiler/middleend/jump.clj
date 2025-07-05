@@ -8,11 +8,9 @@
 (defn- id-to-sym [fun-id]
   (clojure.string/replace (str "fun_" fun-id) #"[:-]" ""))
 
-(defn label [label-name]
-  {::ir/kind ::label
-   ::name label-name})
 
-(defmethod ir/codegen ::label [label _]
+
+(defmethod ir/codegen-instruction ::label [label _]
   [(str (id-to-sym (::name label)) ":")])
 
 
@@ -20,7 +18,7 @@
   {::ir/kind ::goto
    ::name label-name})
 
-(defmethod ir/codegen ::goto [goto _]
+(defmethod ir/codegen-instruction ::goto [goto _]
   [(str "jmp" (id-to-sym (::name goto)))])
 
 
@@ -29,7 +27,7 @@
    ::test test-loc-id
    ::target-label target-label})
 
-(defmethod ir/codegen ::jump-if-true [instr loc-mapper]
+(defmethod ir/codegen-instruction ::jump-if-true [instr loc-mapper]
   (let [test-loc (loc-mapper (::test instr))
         test-loc-code (ir/read-location test-loc)]
     [(str "cmp $0, " test-loc-code)
@@ -40,7 +38,7 @@
    ::test test-loc-id
    ::target-label target-label})
 
-(defmethod ir/codegen ::jump-if-false [instr loc-mapper]
+(defmethod ir/codegen-instruction ::jump-if-false [instr loc-mapper]
   (let [test-loc (loc-mapper (::test instr))
         test-loc-code (ir/read-location test-loc)]
     [(str "cmp $0, " test-loc-code)
@@ -50,7 +48,7 @@
   {::ir/kind ::return
    ::a ret-value-loc})
 
-(defmethod ir/codegen ::return [instr loc-mapper]
+(defmethod ir/codegen-instruction ::return [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
         size (::ir/size a-loc)]
     (when-not (= 32 size) (throw (Exception. "returning non 32 bit values not currently supported")))
