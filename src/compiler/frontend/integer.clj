@@ -41,7 +41,7 @@
     :else c))
 
 (defmethod expr/to-ir ::numerical-constant [c into]
-  (ir/move (::value c) into))
+  [(ir/move (::value c) into)])
 
 (defmethod expr/typecheck ::numerical-constant [c _]
   (assoc c ::type/type int-type))
@@ -61,7 +61,7 @@
 (defmethod expr/to-ir ::unary-minus [n target]
   (let [prev (expr/to-ir (::child n) target)]
     (into prev
-          (arith-ir/un-op ::arith-ir/negate target target))))
+          [(ir/un-op ::ir/negate target target)])))
 
 (defmethod expr/typecheck ::unary-minus [n env]
   (let [new-c (expr/typecheck (::child n) env)
@@ -92,7 +92,7 @@
     (into []
           (concat l-prev
                   r-prev
-                  (arith-ir/bin-op op l r target)))))
+                  [(ir/bin-op op l r target)]))))
 
 (defn- typecheck-bin-op [op env]
   (let [ta  (expr/typecheck (::left op) env)
@@ -118,7 +118,7 @@
 
 (defmethod ast/pretty-print ::plus [n] (pretty-print-binop n "+"))
 
-(defmethod expr/to-ir ::plus [n res] (to-ir-bin-op n res ::arith-ir/add))
+(defmethod expr/to-ir ::plus [n res] (to-ir-bin-op n res ::ir/add))
 
 (defmethod expr/typecheck ::plus [p env] (typecheck-bin-op p env))
 
@@ -132,7 +132,7 @@
 
 (defmethod ast/pretty-print ::minus [n] (pretty-print-binop n "-"))
 
-(defmethod expr/to-ir ::minus [n res] (to-ir-bin-op n res ::arith-ir/sub))
+(defmethod expr/to-ir ::minus [n res] (to-ir-bin-op n res ::ir/sub))
 
 (defmethod expr/typecheck ::minus [p env] (typecheck-bin-op p env))
 
@@ -146,7 +146,7 @@
 
 (defmethod ast/pretty-print ::mul [n] (pretty-print-binop n "*"))
 
-(defmethod expr/to-ir ::mul [n res] (to-ir-bin-op n res ::arith-ir/mul))
+(defmethod expr/to-ir ::mul [n res] (to-ir-bin-op n res ::ir/mul))
 
 (defmethod expr/typecheck ::mul [p env] (typecheck-bin-op p env))
 
@@ -159,7 +159,7 @@
 
 (defmethod ast/pretty-print ::div [n] (pretty-print-binop n "/"))
 
-(defmethod expr/to-ir ::div [n res] (to-ir-bin-op n res ::arith-ir/div))
+(defmethod expr/to-ir ::div [n res] (to-ir-bin-op n res ::ir/div))
 
 (defmethod expr/typecheck ::div [p env] (typecheck-bin-op p env))
 
@@ -172,7 +172,7 @@
 
 (defmethod ast/pretty-print ::mod [n] (pretty-print-binop n "%"))
 
-(defmethod expr/to-ir ::mod [n res] (to-ir-bin-op n res ::arith-ir/mod))
+(defmethod expr/to-ir ::mod [n res] (to-ir-bin-op n res ::ir/mod))
 
 (defmethod expr/typecheck ::mod [p env] (typecheck-bin-op p env))
 
@@ -186,7 +186,7 @@
 
 (defmethod ast/pretty-print ::shift-left [n] (pretty-print-binop n "<<"))
 
-(defmethod expr/to-ir ::shift-left [n res] (to-ir-bin-op n res ::arith-ir/shift-left))
+(defmethod expr/to-ir ::shift-left [n res] (to-ir-bin-op n res ::ir/shift-left))
 
 (defmethod expr/typecheck ::shift-left [p env] (typecheck-bin-op p env))
 
@@ -199,7 +199,7 @@
 
 (defmethod ast/pretty-print ::shift-right [n] (pretty-print-binop n "<<"))
 
-(defmethod expr/to-ir ::shift-right [n res] (to-ir-bin-op n res ::arith-ir/shift-right))
+(defmethod expr/to-ir ::shift-right [n res] (to-ir-bin-op n res ::ir/shift-right))
 
 (defmethod expr/typecheck ::shift-right [p env] (typecheck-bin-op p env))
 
@@ -219,7 +219,7 @@
   (let [tmp (id/make-tmp)
         prev (expr/to-ir (::child n) tmp)]
     (into prev
-          (arith-ir/un-op ::arith-ir/bitwise-not tmp target))))
+          (ir/un-op ::ir/bitwise-not tmp target))))
 
 (defmethod expr/typecheck ::bit-not [n env]
   (let [new-c (expr/typecheck (::child n) env)
@@ -242,7 +242,7 @@
 
 (defmethod ast/pretty-print ::bit-and [n] (pretty-print-binop n "&"))
 
-(defmethod expr/to-ir ::bit-and [n res] (to-ir-bin-op n res ::arith-ir/bitwise-and))
+(defmethod expr/to-ir ::bit-and [n res] (to-ir-bin-op n res ::ir/bitwise-and))
 
 (defmethod expr/typecheck ::bit-and [p env] (typecheck-bin-op p env))
 
@@ -257,7 +257,7 @@
 
 (defmethod ast/pretty-print ::bit-xor [n] (pretty-print-binop n "^"))
 
-(defmethod expr/to-ir ::bit-xor [n res] (to-ir-bin-op n res ::arith-ir/bitwise-xor))
+(defmethod expr/to-ir ::bit-xor [n res] (to-ir-bin-op n res ::ir/bitwise-xor))
 
 (defmethod expr/typecheck ::bit-xor [p env] (typecheck-bin-op p env))
 
@@ -272,6 +272,6 @@
 
 (defmethod ast/pretty-print ::bit-or [n] (pretty-print-binop n "|"))
 
-(defmethod expr/to-ir ::bit-or [n res] (to-ir-bin-op n res ::arith-ir/bitwise-or))
+(defmethod expr/to-ir ::bit-or [n res] (to-ir-bin-op n res ::ir/bitwise-or))
 
 (defmethod expr/typecheck ::bit-or [p env] (typecheck-bin-op p env))

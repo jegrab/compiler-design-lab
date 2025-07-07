@@ -6,7 +6,7 @@
             [compiler.frontend.common.error :as err]
             [compiler.frontend.common.type :as type]
             [compiler.frontend.expression :as expr]
-            [compiler.middleend.oldir :as ir]))
+            [compiler.middleend.ir :as ir]))
 
 (def bool-type (type/simple-type ::bool))
 
@@ -33,7 +33,7 @@
 (defmethod ast/pretty-print ::boolean-constant [c] (str (::value c)))
 
 (defmethod expr/to-ir ::boolean-constant [c into]
-  [[::ir/assign into (if (::value c) 1 0)]])
+  [(ir/move (if (::value c) 1 0) into)])
 
 (defmethod expr/typecheck ::boolean-constant [c _]
   (assoc c ::type/type bool-type))

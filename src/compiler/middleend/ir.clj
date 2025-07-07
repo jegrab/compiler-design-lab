@@ -11,6 +11,15 @@
 ; cont { ::kind if-then-else ::test-var ::target label}
 ; function { ::name label ::params [params...] ::start ::label ::blocks {name block ...}
 
+(defn mk-fn-block
+  "produces an unfinished function with the given names and parameters but no blocks.
+   Has an empty ::current-block that can be used to construct a complete the function."
+  [name params]
+  {::name name
+   ::params (into [] params)
+   ::start ::start
+   ::current-block {::name ::start ::code []}})
+
 
 (defmulti codegen-instruction
   "generates a list of strings. each string is a line of assembly.
@@ -22,7 +31,7 @@
    and ::size is the size of the data in the location in bits"
   (fn [instr location-mapper] (::kind instr)))
 
-(defn label [label-name] 
+(defn label [label-name]
   {::kind ::label
    ::id (id/make-id-num)
    ::name label-name})
@@ -51,6 +60,9 @@
 (defn goto [target-label]
   {::kind ::goto
    ::target target-label})
+
+(defn return []
+  {::kind ::return})
 
 (defn un-op [op-name source target]
   {::kind op-name
@@ -140,7 +152,7 @@
   identity)
 (defmethod special-register? :default [_] false)
 
-(defmethod codegen-continuation ::goto [goto loc-mapper] 
+(defmethod codegen-continuation ::goto [goto loc-mapper]
   [(str "jmp " (label-string (::target goto)))])
 
 (defmethod codegen-continuation ::if-then-else [ite loc-mapper]
