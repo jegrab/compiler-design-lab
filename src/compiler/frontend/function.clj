@@ -14,6 +14,7 @@
    [compiler.frontend.expression :as expr]
    [compiler.middleend.oldir :as oldir]
    [compiler.middleend.ir :as ir] 
+   [compiler.middleend.jump :as jump-ir]
    [compiler.frontend.integer :as int]
    [compiler.frontend.statement :as stmt]))
 
@@ -174,6 +175,11 @@
      (expr/to-ir (::ret-expr ret) tmp)
      (jump-ir/return tmp))))
 
+(defmethod ast/gen-ir ::return [state ret]
+  (ir/set-cont
+   (ast/gen-ir (::ret-expr ret) (assoc state ::ir/target ::ir/ret))
+   (ir/return)))
+
 (defmethod stmt/typecheck ::return [ret env]
   (let [decl-type (env ::ret-type)
         new-expr (expr/typecheck (::ret-expr ret) env)
@@ -299,10 +305,8 @@
      env]))
 
 (defmethod top/to-ir ::function-def [def]
-  {::ir/kind ::ir/fun
-   ::ir/name (::id def)
-   ::ir/params (map ::var/id (::params def))
-   ::ir/body (stmt/to-ir (::body def))})
+  (let [block (ir/fun-block (::id def) (map ::var/id (::params def)))]
+    (ast/gen-ir (::body def) block)))
 
 (defn is-main [def]
   (= "main" (::name def)))

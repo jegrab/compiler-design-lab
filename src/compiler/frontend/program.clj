@@ -81,7 +81,7 @@
        ::errors #{(err/make-parser-error "unknown fatal parser error")}})))
 
 (defn to-ir [decls]
-  (into [] (map top/to-ir decls)))
+  (mapv top/to-ir decls))
 
 ;only support call as expression statement
 (defmethod ast/check-after-parse ::expr/expr-stmt [e]

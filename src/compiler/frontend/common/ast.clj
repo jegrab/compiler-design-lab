@@ -31,3 +31,7 @@
                                               (if (vector? node)
                                                 node
                                                 (map #(% node) (::children node)))) ast))))
+
+(defmulti gen-ir 
+  "takes a node and an ir-state and returns a new ir-state"
+  (fn [ir-state node] (::kind node)))

@@ -43,6 +43,9 @@
 (defmethod expr/to-ir ::numerical-constant [c into]
   (ir/move (::value c) into))
 
+(defmethod ast/gen-ir ::numerical-constant [state const]
+  (ir/add-instruction state (ir/move (::value const) (::ir/target state))))
+
 (defmethod expr/typecheck ::numerical-constant [c _]
   (assoc c ::type/type int-type))
 
@@ -61,7 +64,14 @@
 (defmethod expr/to-ir ::unary-minus [n target]
   (let [prev (expr/to-ir (::child n) target)]
     (into prev
-          (arith-ir/un-op ::arith-ir/negate target target))))
+          (ir/un-op ::ir/negate target target))))
+
+(defn- gen-ir-unop [state node op]
+  (ir/add-instruction (ast/gen-ir state (::child node))
+                      (ir/un-op op (::ir/target state) (::ir/target state))))
+
+(defmethod ast/gen-ir ::unary-minus [state minus]
+  (gen-ir-unop state minus ::ir/negate))
 
 (defmethod expr/typecheck ::unary-minus [n env]
   (let [new-c (expr/typecheck (::child n) env)
@@ -84,7 +94,7 @@
 (defn- pretty-print-binop [node op-str]
   (str "(" (ast/pretty-print (::left node)) op-str (ast/pretty-print (::right node)) ")"))
 
-(defn- to-ir-bin-op [n target op]
+(defn- to-ir-bin-op-old [n target op]
   (let [l (id/make-tmp)
         r (id/make-tmp)
         l-prev (expr/to-ir (::left n) l)
@@ -92,7 +102,16 @@
     (into []
           (concat l-prev
                   r-prev
-                  (arith-ir/bin-op op l r target)))))
+                  (ir/bin-op op l r target)))))
+
+(defn- to-ir-bin-op [node state op]
+  (let [t (::ir/target state)
+        l (id/make-tmp)
+        r (id/make-tmp)
+        state (ast/gen-ir (assoc state ::ir/target l) (::left node))
+        state (ast/gen-ir (assoc state ::ir/target r) (::right node))]
+    (ir/add-instruction (assoc state ::ir/target t) (ir/bin-op op l r t))))
+
 
 (defn- typecheck-bin-op [op env]
   (let [ta  (expr/typecheck (::left op) env)
@@ -118,7 +137,8 @@
 
 (defmethod ast/pretty-print ::plus [n] (pretty-print-binop n "+"))
 
-(defmethod expr/to-ir ::plus [n res] (to-ir-bin-op n res ::arith-ir/add))
+(defmethod expr/to-ir ::plus [n res] (to-ir-bin-op-old n res ::ir/add))
+(defmethod ast/gen-ir ::plus [state node] (to-ir-bin-op node state ::ir/add))
 
 (defmethod expr/typecheck ::plus [p env] (typecheck-bin-op p env))
 
@@ -132,7 +152,8 @@
 
 (defmethod ast/pretty-print ::minus [n] (pretty-print-binop n "-"))
 
-(defmethod expr/to-ir ::minus [n res] (to-ir-bin-op n res ::arith-ir/sub))
+(defmethod expr/to-ir ::minus [n res] (to-ir-bin-op-old n res ::ir/sub))
+(defmethod ast/gen-ir ::minus [state node] (to-ir-bin-op node state ::ir/sub))
 
 (defmethod expr/typecheck ::minus [p env] (typecheck-bin-op p env))
 
@@ -146,7 +167,8 @@
 
 (defmethod ast/pretty-print ::mul [n] (pretty-print-binop n "*"))
 
-(defmethod expr/to-ir ::mul [n res] (to-ir-bin-op n res ::arith-ir/mul))
+(defmethod expr/to-ir ::mul [n res] (to-ir-bin-op-old n res ::ir/mul))
+(defmethod ast/gen-ir ::mul [state node] (to-ir-bin-op node state ::ir/mul))
 
 (defmethod expr/typecheck ::mul [p env] (typecheck-bin-op p env))
 
@@ -159,7 +181,8 @@
 
 (defmethod ast/pretty-print ::div [n] (pretty-print-binop n "/"))
 
-(defmethod expr/to-ir ::div [n res] (to-ir-bin-op n res ::arith-ir/div))
+(defmethod expr/to-ir ::div [n res] (to-ir-bin-op-old n res ::ir/div))
+(defmethod ast/gen-ir ::div [state node] (to-ir-bin-op node state ::ir/div))
 
 (defmethod expr/typecheck ::div [p env] (typecheck-bin-op p env))
 
@@ -172,7 +195,8 @@
 
 (defmethod ast/pretty-print ::mod [n] (pretty-print-binop n "%"))
 
-(defmethod expr/to-ir ::mod [n res] (to-ir-bin-op n res ::arith-ir/mod))
+(defmethod expr/to-ir ::mod [n res] (to-ir-bin-op-old n res ::ir/mod))
+(defmethod ast/gen-ir ::mod [state node] (to-ir-bin-op node state ::ir/mod))
 
 (defmethod expr/typecheck ::mod [p env] (typecheck-bin-op p env))
 
@@ -186,7 +210,8 @@
 
 (defmethod ast/pretty-print ::shift-left [n] (pretty-print-binop n "<<"))
 
-(defmethod expr/to-ir ::shift-left [n res] (to-ir-bin-op n res ::arith-ir/shift-left))
+(defmethod expr/to-ir ::shift-left [n res] (to-ir-bin-op-old n res ::ir/shift-left))
+(defmethod ast/gen-ir ::shift-left [state node] (to-ir-bin-op node state ::ir/shift-left))
 
 (defmethod expr/typecheck ::shift-left [p env] (typecheck-bin-op p env))
 
@@ -199,7 +224,8 @@
 
 (defmethod ast/pretty-print ::shift-right [n] (pretty-print-binop n "<<"))
 
-(defmethod expr/to-ir ::shift-right [n res] (to-ir-bin-op n res ::arith-ir/shift-right))
+(defmethod expr/to-ir ::shift-right [n res] (to-ir-bin-op-old n res ::ir/shift-right))
+(defmethod ast/gen-ir ::shift-right [state node] (to-ir-bin-op node state ::ir/shift-right))
 
 (defmethod expr/typecheck ::shift-right [p env] (typecheck-bin-op p env))
 
@@ -219,7 +245,10 @@
   (let [tmp (id/make-tmp)
         prev (expr/to-ir (::child n) tmp)]
     (into prev
-          (arith-ir/un-op ::arith-ir/bitwise-not tmp target))))
+          (ir/un-op ::ir/bitwise-not tmp target))))
+
+(defmethod ast/gen-ir ::bit-not [state node]
+  (gen-ir-unop state node ::ir/bitwise-not))
 
 (defmethod expr/typecheck ::bit-not [n env]
   (let [new-c (expr/typecheck (::child n) env)
@@ -242,7 +271,8 @@
 
 (defmethod ast/pretty-print ::bit-and [n] (pretty-print-binop n "&"))
 
-(defmethod expr/to-ir ::bit-and [n res] (to-ir-bin-op n res ::arith-ir/bitwise-and))
+(defmethod expr/to-ir ::bit-and [n res] (to-ir-bin-op-old n res ::ir/bitwise-and))
+(defmethod ast/gen-ir ::bit-and [state node] (to-ir-bin-op node state ::ir/bitwise-and))
 
 (defmethod expr/typecheck ::bit-and [p env] (typecheck-bin-op p env))
 
@@ -257,7 +287,8 @@
 
 (defmethod ast/pretty-print ::bit-xor [n] (pretty-print-binop n "^"))
 
-(defmethod expr/to-ir ::bit-xor [n res] (to-ir-bin-op n res ::arith-ir/bitwise-xor))
+(defmethod expr/to-ir ::bit-xor [n res] (to-ir-bin-op-old n res ::ir/bitwise-xor))
+(defmethod ast/gen-ir ::bit-xor [state node] (to-ir-bin-op node state ::ir/bitwise-xor))
 
 (defmethod expr/typecheck ::bit-xor [p env] (typecheck-bin-op p env))
 
@@ -272,6 +303,7 @@
 
 (defmethod ast/pretty-print ::bit-or [n] (pretty-print-binop n "|"))
 
-(defmethod expr/to-ir ::bit-or [n res] (to-ir-bin-op n res ::arith-ir/bitwise-or))
+(defmethod expr/to-ir ::bit-or [n res] (to-ir-bin-op-old n res ::ir/bitwise-or))
+(defmethod ast/gen-ir ::bit-or [state node] (to-ir-bin-op node state ::ir/bitwise-or))
 
 (defmethod expr/typecheck ::bit-or [p env] (typecheck-bin-op p env))

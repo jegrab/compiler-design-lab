@@ -6,41 +6,12 @@
 ; instruction { ::kind ::assign ::dest name ::source name}
 ; 
 ;
-; block { ::name label ::code [instructions ...] ::next ::cont}
+; block { ::name label ::code [instructions ...] ::cont ::cont}
 ; cont { ::kind goto ::target label}
 ; cont { ::kind if-then-else ::test-var ::target label}
 ; function { ::name label ::params [params...] ::start ::label ::blocks {name block ...}
 
-
-(defmulti codegen-instruction
-  "generates a list of strings. each string is a line of assembly.
-   location-mapper is  a function that takes an identifier and returns a location.
-   an integer literal can also be instead of an identifier and represents a location that stores that literal identifier (but can not be written to).
-   the identifier ::helper returns a register that is not used by any other identifier.
-   A location is a map of form {::kind kind ::size bytes} with additional fields depending on the kind
-   where kind is something like ::register or ::stack
-   and ::size is the size of the data in the location in bits"
-  (fn [instr location-mapper] (::kind instr)))
-
-(defn label [label-name] 
-  {::kind ::label
-   ::id (id/make-id-num)
-   ::name label-name})
-
-(defn label-string [label]
-  (let [name (str/replace (::name label) #"[^a-zA-Z0-9]" "")]
-    (str name "_" (::id label))))
-
-(defmulti codegen-continuation (fn [cont loc-mapper] (::kind cont)))
-
-(defn codegen-block [block loc-mapper]
-  ())
-
-(defmulti read-location
-  "takes an location and returns a string (asm code) that represents that location.
-   This string is a register or a relative position. "
-  (fn [loc] (::kind loc)))
-
+(def ^:dynamic architecture ::x86-64)
 
 (defn if-then-else [test-bool-location then-label else-label]
   {::kind ::if-then-else
@@ -51,6 +22,9 @@
 (defn goto [target-label]
   {::kind ::goto
    ::target target-label})
+
+(defn return []
+  {::kind ::return})
 
 (defn un-op [op-name source target]
   {::kind op-name
@@ -65,8 +39,72 @@
 
 (defn move [a target] (un-op ::move a target))
 
+(defn fun-block
+  "takes a name and returns an unfinished function block.
+   i has an empty ::blocks map and an unfinished ::current block that contains no code."
+  [name params]
+  (let [start-label name]
+    {::name name
+     ::params params
+     ::start start-label
+     ::blocks {start-label {::name start-label
+                            ::code []}}
+     ::current start-label}))
 
+(defn add-instruction
+  "adds the given instruction to the end of the block with the specified name.
+   The default is the name stored in ::current of the block.
+   If there is neither a block-name provided nor a ::current in the block, then the instruction is not added."
+  ([fun-block instr] (add-instruction fun-block instr (::current fun-block)))
+  ([fun-block instr block-name]
+   (let [current ((::blocks fun-block) block-name)
+         new-code (conj (::code current) instr)
+         new-curr (assoc current ::code new-code)]
+     (if current
+       (assoc-in fun-block
+                 [::blocks block-name] new-curr)
+       fun-block))))
 
+(defn set-cont
+  "sets the given cont as the cont of the block with the specified name.
+   The default is the name stored in ::current of the block.
+   Removes ::current from the block"
+  ([fun-block cont] (set-cont fun-block cont (::current fun-block)))
+  ([fun-block cont block-name]
+   (let [current ((::blocks fun-block) block-name)
+         new-curr (assoc current ::cont cont)]
+     (dissoc (assoc-in fun-block
+                       [::blocks block-name] new-curr)
+             ::current))))
+
+(defmulti codegen-instruction
+  "generates a list of strings. each string is a line of assembly.
+   location-mapper is  a function that takes an identifier and returns a location.
+   an integer literal can also be instead of an identifier and represents a location that stores that literal identifier (but can not be written to).
+   the identifier ::helper returns a register that is not used by any other identifier.
+   The identifier ::ret returns a location where the return value should be stored in.
+   A location is a map of form {::kind kind ::size bytes} with additional fields depending on the kind
+   where kind is something like ::register or ::stack
+   and ::size is the size of the data in the location in bits"
+  (fn [instr location-mapper] [(::kind instr) architecture]))
+
+(defn label-string [label]
+  (let [name (str/replace (str label) #"[^a-zA-Z0-9]" "")]
+    (str name "_" (::id label))))
+
+(defmulti codegen-continuation (fn [cont loc-mapper] [(::kind cont) architecture]))
+
+(defn- codegen-block [block loc-mapper]
+  (conj (mapv #(codegen-instruction % loc-mapper) (::code block))
+        (codegen-continuation (::cont block) loc-mapper)))
+
+(defmulti codegen-function (fn [fun-block] architecture))
+(defmulti codegen (fn [fun-blocks main-id] architecture))
+
+(defmulti read-location
+  "takes an location and returns a string (asm code) that represents that location.
+   This string is a register or a relative position. "
+  (fn [loc] (::kind loc)))
 
 
 (defmulti memory? (fn [loc] (::kind loc)))
@@ -140,17 +178,81 @@
   identity)
 (defmethod special-register? :default [_] false)
 
-(defmethod codegen-continuation ::goto [goto loc-mapper] 
+
+(defmethod codegen-function ::x86-64 [fun-bloc]
+  (let [block-code (map (fn [[name block]] (codegen-block block loc-mapper))
+                        (::blocks fun-block))]
+    (into [] (concat block-code))))
+
+(def print-code
+  [(str (label-string :print) ":")
+   "pushq %rbp"
+   "movq %rsp, %rbp"
+   "call putchar"
+   "movl $0, %eax"
+   "leave"
+   "ret"
+   ""])
+
+(def read-code
+  [(str (label-string :read) ":")
+   "pushq %rbp"
+   "movq %rsp, %rbp"
+   "call getchar"
+   "leave"
+   "ret"
+   ""])
+
+(def flush-code
+  [(str (label-string :flush) ":")
+   "pushq %rbp"
+   "movq %rsp, %rbp"
+   "movq stdout(%rip), %rdi"
+   "call fflush"
+   "movl $0, %eax"
+   "leave"
+   "ret"
+   ""])
+
+(defmethod codegen ::x86-64 [fun-blocks main-id]
+  (println "called new codegen")
+  (let [decl-asm (apply concat (map codegen-function fun-blocks))
+        preamble (concat print-code read-code flush-code)
+        before [".global my_main"
+                ".text"
+                "\n"
+                "my_main:"
+                "pushq %rbp"
+                "movq %rsp, %rbp"
+                (str "call " (label-string main-id))
+                "movl %eax, %ebx"
+                "movq stdout(%rip), %rdi"
+                "call fflush"
+                "movl %ebx, %eax"
+                "leave"
+                "ret"
+                "\n"
+                "\n"]
+  
+        after ["\n"]
+        whole (concat preamble before decl-asm after)]
+    (clojure.string/join "\n" whole)))
+
+(defmethod codegen-continuation [::goto ::x86-64] [goto loc-mapper] 
   [(str "jmp " (label-string (::target goto)))])
 
-(defmethod codegen-continuation ::if-then-else [ite loc-mapper]
+(defmethod codegen-continuation [::return ::x86-64] [ret loc-mapper]
+  ["leave"
+   "ret"])
+
+(defmethod codegen-continuation [::if-then-else ::x86-64] [ite loc-mapper]
   (let [test-loc (loc-mapper (::test ite))
         test-loc-code (read-location test-loc)]
     [(str "cmp $0, " test-loc-code)
      (str "jne " (label-string (::then ite)))
      (str "jmp " (label-string (::else ite)))]))
 
-(defmethod codegen-instruction ::move [instr loc-mapper]
+(defmethod codegen-instruction [::move ::x86-64] [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
         t-loc (loc-mapper (::target instr))
         h-loc (loc-mapper ::helper)]
@@ -189,13 +291,13 @@
       [(make-code "mov" a-loc t-loc)
        (make-code name t-loc)])))
 
-(defmethod codegen-instruction ::negate [instr loc-mapper]
+(defmethod codegen-instruction [::negate ::x86-64] [instr loc-mapper]
   (codegen-unop "neg" instr loc-mapper))
 
-(defmethod codegen-instruction ::add [instr loc-mapper]
+(defmethod codegen-instruction [::add ::x86-64] [instr loc-mapper]
   (codegen-commutative-binop "add" instr loc-mapper))
 
-(defmethod codegen-instruction ::sub [instr loc-mapper]
+(defmethod codegen-instruction [::sub ::x86-64] [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
         b-loc (loc-mapper (::b instr))
         t-loc (loc-mapper (::target instr))
@@ -208,7 +310,7 @@
        (make-code "sub" b-loc h-loc)
        (make-code "mov" h-loc t-loc)])))
 
-(defmethod codegen-instruction ::mul [instr loc-mapper]
+(defmethod codegen-instruction [::mul ::x86-64] [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
         b-loc (loc-mapper (::b instr))
         t-loc (loc-mapper (::target instr))]
@@ -218,7 +320,7 @@
 (defmethod special-register? ::accumulator [_] true)
 (defmethod special-register? ::data [_] true)
 
-(defmethod codegen-instruction ::div [instr loc-mapper]
+(defmethod codegen-instruction [::div ::x86-64] [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
         b-loc (loc-mapper (::b instr))
         t-loc (loc-mapper (::target instr))
@@ -231,7 +333,7 @@
           (make-code "mov" (loc-of-reg ::accumulator size) t-loc)]
       64 (throw (Exception. "64 bit division not implemented")))))
 
-(defmethod codegen-instruction ::mod [instr loc-mapper]
+(defmethod codegen-instruction [::mod ::x86-64] [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
         b-loc (loc-mapper (::b instr))
         t-loc (loc-mapper (::target instr))
@@ -245,19 +347,19 @@
       64 (throw (Exception. "64 bit division not implemented")))))
 
 
-(defmethod codegen-instruction ::bitwise-and [instr loc-mapper]
+(defmethod codegen-instruction [::bitwise-and ::x86-64] [instr loc-mapper]
   (codegen-commutative-binop "and" instr loc-mapper))
 
-(defmethod codegen-instruction ::bitwise-or [instr loc-mapper]
+(defmethod codegen-instruction [::bitwise-or ::x86-64] [instr loc-mapper]
   (codegen-commutative-binop "or" instr loc-mapper))
 
-(defmethod codegen-instruction ::bitwise-xor [instr loc-mapper]
+(defmethod codegen-instruction [::bitwise-xor ::x86-64] [instr loc-mapper]
   (codegen-commutative-binop "xor" instr loc-mapper))
 
-(defmethod codegen-instruction ::bitwise-not [instr loc-mapper]
+(defmethod codegen-instruction [::bitwise-not ::x86-64] [instr loc-mapper]
   (codegen-unop "not" instr loc-mapper))
 
-(defmethod codegen-instruction ::bool-not [instr loc-mapper]
+(defmethod codegen-instruction [::bool-not ::x86-64] [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
         t-loc (loc-mapper (::target instr))
         h-loc (loc-mapper ::helper)]
@@ -279,8 +381,8 @@
        (make-code name b-loc h-loc)
        (make-code "mov" h-loc t-loc)])))
 
-(defmethod codegen-instruction ::shift-left [instr loc-mapper]
+(defmethod codegen-instruction [::shift-left ::x86-64] [instr loc-mapper]
   (codegen-shift "sal" instr loc-mapper))
 
-(defmethod codegen-instruction ::shift-right [instr loc-mapper]
+(defmethod codegen-instruction [::shift-right ::x86-64] [instr loc-mapper]
   (codegen-shift "sar" instr loc-mapper))

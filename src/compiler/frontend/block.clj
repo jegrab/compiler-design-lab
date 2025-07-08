@@ -4,7 +4,8 @@
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.parser :as p]
             [compiler.frontend.statement :as stmt]
-            [compiler.frontend.common.namespace :as name]))
+            [compiler.frontend.common.namespace :as name]
+            [compiler.middleend.ir :as ir]))
 
 (defn- token [kind]
   (fn [tok]
@@ -52,6 +53,9 @@
     [(assoc block
             ::stmts new-stmts)
      env]))
+
+(defmethod ast/gen-ir ::block [state block]
+  (reduce ast/gen-ir state (::stmts block)))
 
 (defmethod stmt/to-ir ::block [block]
   (loop [stmts (::stmts block)

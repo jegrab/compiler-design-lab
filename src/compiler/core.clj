@@ -4,7 +4,7 @@
             [compiler.frontend.common.lexer :as lex]
             [compiler.frontend.common.ast :as ast]
             [compiler.frontend.statement :as stmt]
-            [compiler.middleend.oldir :as ir])
+            [compiler.middleend.ir :as ir])
   (:gen-class))
 
 (defn- exit-illegal-arguments []
@@ -43,7 +43,7 @@
             (throw-semantic-analysis))
         ;_ (println "input \n" (ast/pretty-print decls) "\n")
         ir (p/to-ir decls)
-        asm (ir/make-code ir main-id)] 
+        asm (ir/codegen ir main-id)] 
     (spit output-file-str asm)))
 
 
