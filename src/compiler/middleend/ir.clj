@@ -125,8 +125,9 @@
    A location is a map of form {::kind kind ::size bytes} with additional fields depending on the kind
    where kind is something like ::register or ::stack
    and ::size is the size of the data in the location in bits"
-  (conj (mapv #(codegen-instruction % loc-mapper) (::code block))
-        (codegen-continuation (::cont block) loc-mapper)))
+  (apply concat
+         (conj (mapv #(codegen-instruction % loc-mapper) (::code block))
+               (codegen-continuation (::cont block) loc-mapper))))
 
 (defmulti codegen-function (fn [fun-block] architecture))
 (defmulti codegen (fn [fun-blocks main-id] architecture))
@@ -145,7 +146,6 @@
   (not (and (memory? a) (memory? b))))
 
 (defn size-suffix [loc]
-  (println "size:" loc)
   (case (::size loc)
     8 "b"
     16 "w"
@@ -272,7 +272,10 @@
   (let [loc-mapper-stack (create-stack-loc-mapper fun-block)
         block-code (map (fn [[name block]] (codegen-block block loc-mapper-stack))
                         (::blocks fun-block))]
-    (into [] (concat block-code))))
+    (into [(str (label-string (::name fun-block)) ":")
+           "pushq %rbp"
+           "movq %rsp, %rbp"]
+          (apply concat block-code))))
 
 (def print-code
   [(str (label-string :print) ":")
@@ -307,6 +310,7 @@
 (defmethod codegen ::x86-64 [fun-blocks main-id]
   (println "called new codegen")
   (let [decl-asm (apply concat (map codegen-function fun-blocks))
+        _ (println "dasm: " (map codegen-function fun-blocks))
         preamble (concat print-code read-code flush-code)
         before [".global my_main"
                 ".text"
