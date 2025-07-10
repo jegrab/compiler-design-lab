@@ -11,6 +11,19 @@
 ; cont { ::kind if-then-else ::test-var ::target label}
 ; function { ::name label ::params [params...] ::start ::label ::blocks {name block ...}
 
+(defn make-name
+  ([size]
+   {::kind ::name
+    ::id (id/make-tmp)
+    ::size size})
+  ([size name]
+   (assoc (make-name size) ::name name)))
+
+(defn make-constant [size value]
+  {::kind ::constant
+   ::value value
+   ::size size})
+
 (def ^:dynamic architecture ::x86-64)
 
 (defn if-then-else [test-bool-location then-label else-label]
@@ -26,12 +39,12 @@
 (defn return []
   {::kind ::return})
 
-(defn un-op [op-name source target]
+(defn un-op [op-name source target size]
   {::kind op-name
    ::a source
    ::target target})
 
-(defn bin-op [op-name a b target]
+(defn bin-op [op-name a b target size]
   {::kind op-name
    ::a a
    ::b b
@@ -95,6 +108,14 @@
 (defmulti codegen-continuation (fn [cont loc-mapper] [(::kind cont) architecture]))
 
 (defn- codegen-block [block loc-mapper]
+  "generates a list of strings. each string is a line of assembly.
+   location-mapper is  a function that takes an identifier and returns a location.
+   an integer literal can also be instead of an identifier and represents a location that stores that literal identifier (but can not be written to).
+   the identifier ::helper returns a register that is not used by any other identifier.
+   The identifier ::ret returns a location where the return value should be stored in.
+   A location is a map of form {::kind kind ::size bytes} with additional fields depending on the kind
+   where kind is something like ::register or ::stack
+   and ::size is the size of the data in the location in bits"
   (conj (mapv #(codegen-instruction % loc-mapper) (::code block))
         (codegen-continuation (::cont block) loc-mapper)))
 
@@ -127,10 +148,9 @@
    ::name reg-name})
 
 
-
 (def extra-register #{::reg-8 ::reg-9 ::reg-10 ::reg-11 ::reg-12 ::reg-13 ::reg-14 ::reg-15})
 
-(defmethod read-location :register [loc]
+(defmethod read-location ::register [loc]
   (let [prefix (if (extra-register (::name loc))
                  "r"
                  (case (::size loc)
@@ -178,9 +198,54 @@
   identity)
 (defmethod special-register? :default [_] false)
 
+(defn loc-of-stack [offset size]
+  {::kind ::stack
+   ::size size
+   ::offset offset})
 
-(defmethod codegen-function ::x86-64 [fun-bloc]
-  (let [block-code (map (fn [[name block]] (codegen-block block loc-mapper))
+(defmethod read-location ::stack [loc]
+  (str " -" (::offset loc) "(%rsp)"))
+
+(defmulti get-res-var-name (fn [a] (::kind a)))
+(defmethod get-res-var-name :default [a] (::target a))
+
+(defn fun-instructions [fun-block]
+  (concat (map (fn [[label {code ::code}]] code) (::blocks fun-block))))
+
+(defn create-stack-loc-mapper [fun-block] 
+  (loop [instructions (fun-instructions fun-block)
+         offset 0
+         seen #{}
+         var-mapper {::helper (loc-of-reg ::accumulator 32)}]
+    (if (empty? instructions)
+      (fn [id]
+        (case (::kind id)
+          ::constant {::kind ::constant
+                      ::value (::value id)}
+          ::name (var-mapper (::id id))))
+      (let [curr (first instructions)
+            target (::target curr)
+            size (::size target)
+            size-bytes (case size
+                         8 1
+                         16 2
+                         32 4
+                         64 8)
+            new-offset (+ offset size-bytes)]
+        (if (seen target)
+          (recur (rest instructions)
+                 offset
+                 seen
+                 var-mapper)
+          (recur (rest instructions)
+                 new-offset
+                 (conj seen target)
+                 (assoc var-mapper ::target (loc-of-stack new-offset size))))))))
+
+
+(defmethod codegen-function ::x86-64 [fun-block]
+  (let [loc-mapper-stack (create-stack-loc-mapper fun-block)
+        block-code (map (fn [[name block]] (codegen-block block loc-mapper-stack))
                         (::blocks fun-block))]
     (into [] (concat block-code))))
 
