@@ -19,6 +19,14 @@
   ([size name]
    (assoc (make-name size) ::name name)))
 
+(defn make-name-with-same-size
+  ([other-id]
+   {::kind ::name
+    ::id (id/make-tmp)
+    ::size (::size other-id)})
+  ([other-id name] 
+   (assoc (make-name-with-same-size other-id) ::name name)))
+
 (defn make-constant [size value]
   {::kind ::constant
    ::value value
@@ -39,12 +47,12 @@
 (defn return []
   {::kind ::return})
 
-(defn un-op [op-name source target size]
+(defn un-op [op-name source target]
   {::kind op-name
    ::a source
    ::target target})
 
-(defn bin-op [op-name a b target size]
+(defn bin-op [op-name a b target]
   {::kind op-name
    ::a a
    ::b b
@@ -55,14 +63,15 @@
 (defn fun-block
   "takes a name and returns an unfinished function block.
    i has an empty ::blocks map and an unfinished ::current block that contains no code."
-  [name params]
+  [name params return-size]
   (let [start-label name]
     {::name name
      ::params params
      ::start start-label
      ::blocks {start-label {::name start-label
                             ::code []}}
-     ::current start-label}))
+     ::current start-label
+     ::return-size return-size}))
 
 (defn add-instruction
   "adds the given instruction to the end of the block with the specified name.
@@ -136,6 +145,7 @@
   (not (and (memory? a) (memory? b))))
 
 (defn size-suffix [loc]
+  (println "size:" loc)
   (case (::size loc)
     8 "b"
     16 "w"
@@ -206,41 +216,56 @@
 (defmethod read-location ::stack [loc]
   (str " -" (::offset loc) "(%rsp)"))
 
+(defmethod read-location ::constant [loc]
+  (str (::value loc)))
+
 (defmulti get-res-var-name (fn [a] (::kind a)))
 (defmethod get-res-var-name :default [a] (::target a))
 
 (defn fun-instructions [fun-block]
-  (concat (map (fn [[label {code ::code}]] code) (::blocks fun-block))))
+  (apply concat (map (fn [[label {code ::code}]] code) (::blocks fun-block))))
 
-(defn create-stack-loc-mapper [fun-block] 
+(defn create-stack-loc-mapper [fun-block]
+  (map (fn [x] (println x)) ) 
   (loop [instructions (fun-instructions fun-block)
          offset 0
          seen #{}
          var-mapper {::helper (loc-of-reg ::accumulator 32)}]
     (if (empty? instructions)
       (fn [id]
-        (case (::kind id)
-          ::constant {::kind ::constant
-                      ::value (::value id)}
-          ::name (var-mapper (::id id))))
+        (println "id" id)
+        (cond
+          (= ::ret id)
+          (loc-of-reg ::accumulator (::return-size fun-block))
+
+          (= ::helper id)
+          (loc-of-reg ::accumulator (::return-size fun-block))
+
+          :else
+          (case (::kind id)
+            ::constant {::kind ::constant
+                        ::value (::value id)
+                        ::size (::size id)}
+            ::name (var-mapper (::id id)))))
       (let [curr (first instructions)
             target (::target curr)
-            size (::size target)
-            size-bytes (case size
-                         8 1
-                         16 2
-                         32 4
-                         64 8)
-            new-offset (+ offset size-bytes)]
-        (if (seen target)
+            size (::size target)]
+        (if (or (= ::ret target) (seen target))
           (recur (rest instructions)
                  offset
                  seen
                  var-mapper)
-          (recur (rest instructions)
-                 new-offset
-                 (conj seen target)
-                 (assoc var-mapper ::target (loc-of-stack new-offset size))))))))
+
+          (let [size-bytes (case size
+                             8 1
+                             16 2
+                             32 4
+                             64 8)
+                new-offset (+ offset size-bytes)]
+            (recur (rest instructions)
+                   new-offset
+                   (conj seen target)
+                   (assoc var-mapper ::target (loc-of-stack new-offset size)))))))))
 
 
 (defmethod codegen-function ::x86-64 [fun-block]

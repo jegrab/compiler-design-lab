@@ -32,3 +32,5 @@
               (= ::unknown kb))
           unknown
           :else error)))
+
+(defmulti size-in-bit ::kind)

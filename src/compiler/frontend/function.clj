@@ -177,7 +177,7 @@
 
 (defmethod ast/gen-ir ::return [state ret]
   (ir/set-cont
-   (ast/gen-ir (::ret-expr ret) (assoc state ::ir/target ::ir/ret))
+   (ast/gen-ir (assoc state ::ir/target ::ir/ret) (::ret-expr ret))
    (ir/return)))
 
 (defmethod stmt/typecheck ::return [ret env]
@@ -305,8 +305,8 @@
      env]))
 
 (defmethod top/to-ir ::function-def [def]
-  (let [block (ir/fun-block (::id def) (map ::var/id (::params def)))]
-    (ast/gen-ir (::body def) block)))
+  (let [block (ir/fun-block (::id def) (map ::var/id (::params def)) (type/size-in-bit (::ret-type def)))]
+    (ast/gen-ir block (::body def))))
 
 (defn is-main [def]
   (= "main" (::name def)))

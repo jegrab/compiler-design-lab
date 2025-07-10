@@ -10,6 +10,7 @@
    [compiler.middleend.ir :as ir]))
 
 (def int-type (type/simple-type ::integer))
+(defmethod type/size-in-bit ::integer [_] 32)
 
 (defn- token [kind]
   (fn [tok]
@@ -44,7 +45,7 @@
   (ir/move (::value c) into))
 
 (defmethod ast/gen-ir ::numerical-constant [state const]
-  (ir/add-instruction state (ir/move (::value const) (::ir/target state))))
+  (ir/add-instruction state (ir/move (ir/make-constant 32 (::value const)) (::ir/target state))))
 
 (defmethod expr/typecheck ::numerical-constant [c _]
   (assoc c ::type/type int-type))
@@ -106,8 +107,8 @@
 
 (defn- to-ir-bin-op [node state op]
   (let [t (::ir/target state)
-        l (id/make-tmp)
-        r (id/make-tmp)
+        l (ir/make-name 32)
+        r (ir/make-name 32)
         state (ast/gen-ir (assoc state ::ir/target l) (::left node))
         state (ast/gen-ir (assoc state ::ir/target r) (::right node))]
     (ir/add-instruction (assoc state ::ir/target t) (ir/bin-op op l r t))))
