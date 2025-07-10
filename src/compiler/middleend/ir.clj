@@ -217,7 +217,7 @@
   (str " -" (::offset loc) "(%rsp)"))
 
 (defmethod read-location ::constant [loc]
-  (str (::value loc)))
+  (str "$" (::value loc)))
 
 (defmulti get-res-var-name (fn [a] (::kind a)))
 (defmethod get-res-var-name :default [a] (::target a))
@@ -226,14 +226,12 @@
   (apply concat (map (fn [[label {code ::code}]] code) (::blocks fun-block))))
 
 (defn create-stack-loc-mapper [fun-block]
-  (map (fn [x] (println x)) ) 
   (loop [instructions (fun-instructions fun-block)
          offset 0
          seen #{}
          var-mapper {::helper (loc-of-reg ::accumulator 32)}]
     (if (empty? instructions)
       (fn [id]
-        (println "id" id)
         (cond
           (= ::ret id)
           (loc-of-reg ::accumulator (::return-size fun-block))
@@ -308,9 +306,7 @@
    ""])
 
 (defmethod codegen ::x86-64 [fun-blocks main-id]
-  (println "called new codegen")
   (let [decl-asm (apply concat (map codegen-function fun-blocks))
-        _ (println "dasm: " (map codegen-function fun-blocks))
         preamble (concat print-code read-code flush-code)
         before [".global my_main"
                 ".text"
