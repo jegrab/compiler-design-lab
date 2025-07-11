@@ -171,6 +171,13 @@
 (defmethod stmt/to-ir ::assign [assign]
   (expr/to-ir (::expr assign) (::id (::l-value assign))))
 
+(defmethod ast/gen-ir ::assign [state assign]
+  (let [lv (::l-value assign)
+        id (::id lv)
+        type (::type/type lv)
+        t (ir/name-from-id (type/size-in-bit type) id)]
+    (ast/gen-ir (assoc state ::ir/target t) (::expr assign))))
+
 (defmethod stmt/typecheck ::assign [assign env]
   (let [new-l-v (expr/typecheck (::l-value assign) env)
         new-expr (expr/typecheck (::expr assign) env)
