@@ -231,20 +231,21 @@
          seen #{}
          var-mapper {::helper (loc-of-reg ::accumulator 32)}]
     (if (empty? instructions)
-      (fn [id]
-        (cond
-          (= ::ret id)
-          (loc-of-reg ::accumulator (::return-size fun-block))
+      (do
+        (fn [id]
+          (cond
+            (= ::ret id)
+            (loc-of-reg ::accumulator (::return-size fun-block))
 
-          (= ::helper id)
-          (loc-of-reg ::accumulator (::return-size fun-block))
+            (= ::helper id)
+            (loc-of-reg ::accumulator (::return-size fun-block))
 
-          :else
-          (case (::kind id)
-            ::constant {::kind ::constant
-                        ::value (::value id)
-                        ::size (::size id)}
-            ::name (var-mapper (::id id)))))
+            :else
+            (case (::kind id)
+              ::constant {::kind ::constant
+                          ::value (::value id)
+                          ::size (::size id)}
+              ::name (var-mapper (::id id))))))
       (let [curr (first instructions)
             target (::target curr)
             size (::size target)]
@@ -263,7 +264,7 @@
             (recur (rest instructions)
                    new-offset
                    (conj seen target)
-                   (assoc var-mapper ::target (loc-of-stack new-offset size)))))))))
+                   (assoc var-mapper (::id target) (loc-of-stack new-offset size)))))))))
 
 
 (defmethod codegen-function ::x86-64 [fun-block]
@@ -344,8 +345,7 @@
 
 (defmethod codegen-instruction [::move ::x86-64] [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
-        t-loc (loc-mapper (::target instr))
-        h-loc (loc-mapper ::helper)]
+        t-loc (loc-mapper (::target instr))]
     (if (not-both-memory a-loc bit-shift-left)
       [(str "mov" (size-suffix a-loc) " " (read-location a-loc) ", " (read-location t-loc))]
       [(str "mov" (size-suffix a-loc) "")])))
