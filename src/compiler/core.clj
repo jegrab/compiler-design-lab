@@ -43,6 +43,7 @@
             (throw-semantic-analysis))
         ;_ (println "input \n" (ast/pretty-print decls) "\n")
         ir (p/to-ir decls)
+        ;_(println "ir: " ir)
         asm (ir/codegen ir main-id)] 
     (spit output-file-str asm)))
 

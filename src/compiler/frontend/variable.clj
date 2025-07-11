@@ -8,7 +8,8 @@
             [compiler.frontend.common.namespace :as name]
             [compiler.frontend.common.id :as id]
             [compiler.frontend.common.type :as type]
-            [compiler.middleend.ir :as ir]))
+            [compiler.middleend.ir :as ir]
+            [compiler.frontend.toplevel :as top]))
 
 (defn- token [kind]
   (fn [tok]
@@ -42,6 +43,11 @@
 
 (defmethod expr/to-ir ::identifier [id target]
   (ir/move (::id id) target))
+
+(defmethod ast/gen-ir ::identifier [state id]
+  (let [t (ir/name-from-id (type/size-in-bit (::type/type id)) (::id id))]
+    (ir/add-instruction state
+                        (ir/move t (::ir/target state)))))
 
 (defmethod name/check-initialization-expr ::identifier [id env]
   (if-not ((::name/initialized env) (::id id))
@@ -94,6 +100,12 @@
   (if (::value decl)
     (expr/to-ir (::value decl) (::id decl))
     []))
+
+(defmethod ast/gen-ir ::declare [state decl]
+  (if (::value decl)
+    (let [t (ir/name-from-id (type/size-in-bit (::type/type decl)) (::id decl))]
+     (ast/gen-ir (assoc state ::ir/target t) (::value decl)))
+    state))
 
 (defn declare-var-type [node type env]
   (assoc-in env [::types (::id node)] type))

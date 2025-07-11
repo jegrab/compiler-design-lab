@@ -11,6 +11,11 @@
 ; cont { ::kind if-then-else ::test-var ::target label}
 ; function { ::name label ::params [params...] ::start ::label ::blocks {name block ...}
 
+(defn  name-from-id [size id]
+  {::kind ::name
+   ::id id
+   ::size size})
+
 (defn make-name
   ([size]
    {::kind ::name
@@ -140,7 +145,7 @@
 
 (defmulti memory? (fn [loc] (::kind loc)))
 (defmethod memory? :default [_] false)
-(defmethod memory? ::memory [reg] true)
+(defmethod memory? ::stack [reg] true)
 
 (defn not-both-memory [a b]
   (not (and (memory? a) (memory? b))))
@@ -345,10 +350,12 @@
 
 (defmethod codegen-instruction [::move ::x86-64] [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
-        t-loc (loc-mapper (::target instr))]
-    (if (not-both-memory a-loc bit-shift-left)
+        t-loc (loc-mapper (::target instr))
+        h-loc (loc-mapper ::helper)]
+    (if (not-both-memory a-loc t-loc)
       [(str "mov" (size-suffix a-loc) " " (read-location a-loc) ", " (read-location t-loc))]
-      [(str "mov" (size-suffix a-loc) "")])))
+      [(str "mov" (size-suffix a-loc) " " (read-location a-loc) ", " (read-location h-loc))  
+       (str "mov" (size-suffix a-loc) " " (read-location h-loc) ", " (read-location t-loc))])))
 
 
 
@@ -401,10 +408,7 @@
        (make-code "mov" h-loc t-loc)])))
 
 (defmethod codegen-instruction [::mul ::x86-64] [instr loc-mapper]
-  (let [a-loc (loc-mapper (::a instr))
-        b-loc (loc-mapper (::b instr))
-        t-loc (loc-mapper (::target instr))]
-    [(make-code "imul" a-loc b-loc t-loc)]))
+  (codegen-commutative-binop "imul" instr loc-mapper))
 
 
 (defmethod special-register? ::accumulator [_] true)
