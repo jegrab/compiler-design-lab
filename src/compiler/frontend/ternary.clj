@@ -6,7 +6,8 @@
             [compiler.frontend.common.error :as err]
             [compiler.frontend.common.type :as type]
             [compiler.frontend.expression :as expr]
-            [compiler.middleend.oldir :as ir]
+            [compiler.middleend.oldir :as old-ir]
+            [compiler.middleend.ir :as ir] 
             [compiler.frontend.bool :as bool]))
 
 (defn- token [kind]
@@ -55,10 +56,28 @@
         label-end (id/make-label "end")]
     (into [] (concat
               (expr/to-ir (::test t) test-tmp)
-              [[::ir/if-false-jmp test-tmp label-else]]
+              [[::old-ir/if-false-jmp test-tmp label-else]]
               (expr/to-ir (::then t) res)
-              [[::ir/goto label-end]]
-              [[::ir/target label-else]]
+              [[::old-ir/goto label-end]]
+              [[::old-ir/target label-else]]
               (expr/to-ir (::else t) res)
-              [[::ir/target label-end]
-               [::ir/nop]]))))
+              [[::old-ir/target label-end]
+               [::old-ir/nop]]))))
+
+(defmethod ast/gen-ir ::ternary [state t]
+  (let [test (::test t) 
+        target (::ir/target state)
+        test-tmp (ir/make-name (type/size-in-bit (::type/type test)) "test")
+        label-then (id/make-label "then")
+        label-else (id/make-label "else")
+        label-end (id/make-label "end")
+        state (ast/gen-ir (assoc state ::ir/target test-tmp) test)
+        state (ir/set-cont state (ir/if-then-else test-tmp label-then label-else))
+        state (ir/add-block state label-then)
+        state (ast/gen-ir (assoc state ::ir/target target) (::then t))
+        state (ir/set-cont state (ir/goto label-end))
+        state (ir/add-block state label-else)
+        state (ast/gen-ir (assoc state ::ir/target target) (::else t))
+        state (ir/set-cont state (ir/goto label-end))
+        state (ir/add-block state label-end)]
+    state))

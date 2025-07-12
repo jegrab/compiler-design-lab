@@ -6,9 +6,11 @@
             [compiler.frontend.common.error :as err]
             [compiler.frontend.common.type :as type]
             [compiler.frontend.expression :as expr]
-            [compiler.middleend.oldir :as ir]))
+            [compiler.middleend.oldir :as old-ir]
+            [compiler.middleend.ir :as ir]))
 
 (def bool-type (type/simple-type ::bool))
+(defmethod type/size-in-bit ::bool [_] 32)
 
 (defn- token [kind]
   (fn [tok]
@@ -33,7 +35,12 @@
 (defmethod ast/pretty-print ::boolean-constant [c] (str (::value c)))
 
 (defmethod expr/to-ir ::boolean-constant [c into]
-  [[::ir/assign into (if (::value c) 1 0)]])
+  [[::old-ir/assign into (if (::value c) 1 0)]])
+
+(defmethod ast/gen-ir ::boolean-constant [state const]
+  (let [value (if (::value const) 1 0)
+        const (ir/make-constant 32 value)]
+    (ir/add-instruction state (ir/move const (::ir/target state)))))
 
 (defmethod expr/typecheck ::boolean-constant [c _]
   (assoc c ::type/type bool-type))
@@ -64,8 +71,11 @@
 (defmethod expr/to-ir ::boolean-negation [n res]
   (let [tmp (id/make-tmp)
         prev (expr/to-ir (::child n) tmp)]
-    (conj prev [::ir/assign res [::ir/not tmp]])))
+    (conj prev [::old-ir/assign res [::old-ir/not tmp]])))
 
+(defmethod ast/gen-ir ::boolean-negation [state neg]
+  (ir/add-instruction (ast/gen-ir state (::child neg))
+                      (ir/un-op ::ir/bool-not (::ir/target state) (::ir/target state))))
 
 (defn bin-op-node [op left right]
   {::ast/kind op
@@ -109,14 +119,35 @@
         label-end (id/make-label "end")]
     (into [] (concat
               (expr/to-ir (::left a) l)
-              [[::ir/if-false-jmp l label-false]]
+              [[::old-ir/if-false-jmp l label-false]]
               (expr/to-ir (::right a) r)
-              [[::ir/if-false-jmp r label-false]]
-              [[::ir/assign res 1]
-               [::ir/goto label-end]]
-              [[::ir/target label-false]
-               [::ir/assign res 0]]
-              [[::ir/target label-end]]))))
+              [[::old-ir/if-false-jmp r label-false]]
+              [[::old-ir/assign res 1]
+               [::old-ir/goto label-end]]
+              [[::old-ir/target label-false]
+               [::old-ir/assign res 0]]
+              [[::old-ir/target label-end]]))))
+
+(defmethod ast/gen-ir ::and [state and]
+  (let [target (::ir/target state)
+        left (ir/make-name 32 "left")
+        label-false (id/make-label "false")
+        label-true (id/make-label "true")
+        label-end (id/make-label "end") 
+        
+        state (ast/gen-ir (assoc state ::ir/target left) (::left and))
+        state (ir/set-cont state (ir/if-then-else left label-true label-false))
+        
+        state (ir/add-block state label-true)
+        state (ast/gen-ir (assoc state ::ir/target target) (::right and))
+        state (ir/set-cont state (ir/goto label-end))
+        
+        state (ir/add-block state label-false) 
+        state (ir/add-instruction state (ir/move (ir/make-constant 32 0) target))
+        state (ir/set-cont state (ir/goto label-end))
+        
+        state (ir/add-block state label-end)]
+    (assoc state ::ir/target target)))
 
 (p/def-op expr/parse-expr or
   {:precedence 3 :associates :left}
@@ -136,14 +167,35 @@
         label-end (id/make-label "end")]
     (into [] (concat
               (expr/to-ir (::left a) l)
-              [[::ir/if-true-jmp l label-true]]
+              [[::old-ir/if-true-jmp l label-true]]
               (expr/to-ir (::right a) r)
-              [[::ir/if-true-jmp r label-true]]
-              [[::ir/assign res 0]
-               [::ir/goto label-end]]
-              [[::ir/target label-true]
-               [::ir/assign res 1]]
-              [[::ir/target label-end]]))))
+              [[::old-ir/if-true-jmp r label-true]]
+              [[::old-ir/assign res 0]
+               [::old-ir/goto label-end]]
+              [[::old-ir/target label-true]
+               [::old-ir/assign res 1]]
+              [[::old-ir/target label-end]]))))
+
+(defmethod ast/gen-ir ::or [state or]
+  (let [target (::ir/target state)
+        left (ir/make-name 32 "left")
+        label-false (id/make-label "false")
+        label-true (id/make-label "true")
+        label-end (id/make-label "end")
+
+        state (ast/gen-ir (assoc state ::ir/target left) (::left or))
+        state (ir/set-cont state (ir/if-then-else left label-true label-false))
+
+        state (ir/add-block state label-false)
+        state (ast/gen-ir (assoc state ::ir/target target) (::right or))
+        state (ir/set-cont state (ir/goto label-end))
+
+        state (ir/add-block state label-true)
+        state (ir/add-instruction state (ir/move (ir/make-constant 32 1) target))
+        state (ir/set-cont state (ir/goto label-end))
+
+        state (ir/add-block state label-end)]
+    (assoc state ::ir/target target)))
 
 (defn- typecheck-bin-op-poylmorphic [op env]
   (let [left (expr/typecheck (::left op) env)
@@ -177,12 +229,20 @@
     (into [] (concat 
               (expr/to-ir (::left e) l)
               (expr/to-ir (::right e) r)
-              [[::ir/if-equal-jmp l r label-eq]
-               [::ir/assign res 0] ; not equal -> res is false
-               [::ir/goto label-end]
-               [::ir/target label-eq]
-               [::ir/assign res 1] ; equal -> res is true
-               [::ir/target label-end]]))))
+              [[::old-ir/if-equal-jmp l r label-eq]
+               [::old-ir/assign res 0] ; not equal -> res is false
+               [::old-ir/goto label-end]
+               [::old-ir/target label-eq]
+               [::old-ir/assign res 1] ; equal -> res is true
+               [::old-ir/target label-end]]))))
+
+(defmethod ast/gen-ir ::equal [state eq]
+  (let [t (::ir/target state)
+        l (ir/make-name (type/size-in-bit (::type/type (::left eq))))
+        r (ir/make-name (type/size-in-bit (::type/type (::right eq))))
+        state (ast/gen-ir (assoc state ::ir/target l) (::left eq))
+        state (ast/gen-ir (assoc state ::ir/target r) (::right eq))]
+    (ir/add-instruction (assoc state ::ir/target t) (ir/bin-op ::ir/equal? l r t))))
 
 
 (p/def-op expr/parse-expr not-equal
@@ -196,17 +256,10 @@
 
 (defmethod expr/typecheck ::not-equal [e env] (typecheck-bin-op-poylmorphic e env))
 
-(defmethod expr/to-ir ::not-equal [e res]
-  (let [l (id/make-tmp)
-        r (id/make-tmp)
-        label-eq (id/make-label "eq")
-        label-end (id/make-label "end")]
-    (into [] (concat
-              (expr/to-ir (::left e) l)
-              (expr/to-ir (::right e) r)
-              [[::ir/if-equal-jmp l r label-eq]
-               [::ir/assign res 1] ; not equal -> res is true
-               [::ir/goto label-end]
-               [::ir/target label-eq]
-               [::ir/assign res 0] ; equal -> res is false
-               [::ir/target label-end]]))))
+(defmethod ast/gen-ir ::not-equal [state eq]
+  (let [t (::ir/target state)
+        l (ir/make-name (type/size-in-bit (::type/type (::left eq))))
+        r (ir/make-name (type/size-in-bit (::type/type (::right eq))))
+        state (ast/gen-ir (assoc state ::ir/target l) (::left eq))
+        state (ast/gen-ir (assoc state ::ir/target r) (::right eq))]
+    (ir/add-instruction (assoc state ::ir/target t) (ir/bin-op ::ir/not-equal? l r t))))

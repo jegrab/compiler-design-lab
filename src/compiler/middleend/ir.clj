@@ -65,6 +65,10 @@
 
 (defn move [a target] (un-op ::move a target))
 
+(defn function-start [params]
+  {::kind ::function-start
+   ::params params})
+
 (defn fun-block
   "takes a name and returns an unfinished function block.
    i has an empty ::blocks map and an unfinished ::current block that contains no code."
@@ -74,7 +78,7 @@
      ::params params
      ::start start-label
      ::blocks {start-label {::name start-label
-                            ::code []}}
+                            ::code [(function-start params)]}}
      ::current start-label
      ::return-size return-size}))
 
@@ -104,6 +108,16 @@
                        [::blocks block-name] new-curr)
              ::current))))
 
+(defn add-block 
+  "adds a new empty block (without continuation) to the function block 
+   and sets this block to be the ::current."
+  [fun-block name]
+  (let [new-block {::name name
+                   ::code []}
+        fun-block (assoc-in fun-block [::blocks name] new-block)
+        fun-block (assoc fun-block ::current name)]
+    fun-block))
+
 (defmulti codegen-instruction
   "generates a list of strings. each string is a line of assembly.
    location-mapper is  a function that takes an identifier and returns a location.
@@ -131,8 +145,9 @@
    where kind is something like ::register or ::stack
    and ::size is the size of the data in the location in bits"
   (apply concat
-         (conj (mapv #(codegen-instruction % loc-mapper) (::code block))
-               (codegen-continuation (::cont block) loc-mapper))))
+         (concat [[(str (label-string (::name block)) ":")]]
+                 (mapv #(codegen-instruction % loc-mapper) (::code block))
+                 [(codegen-continuation (::cont block) loc-mapper)])))
 
 (defmulti codegen-function (fn [fun-block] architecture))
 (defmulti codegen (fn [fun-blocks main-id] architecture))
@@ -254,7 +269,7 @@
       (let [curr (first instructions)
             target (::target curr)
             size (::size target)]
-        (if (or (= ::ret target) (seen target))
+        (if (or (not target) (= ::ret target) (seen target))
           (recur (rest instructions)
                  offset
                  seen
@@ -276,10 +291,14 @@
   (let [loc-mapper-stack (create-stack-loc-mapper fun-block)
         block-code (map (fn [[name block]] (codegen-block block loc-mapper-stack))
                         (::blocks fun-block))]
-    (into [(str (label-string (::name fun-block)) ":")
-           "pushq %rbp"
-           "movq %rsp, %rbp"]
+    (into []
           (apply concat block-code))))
+
+(defmethod codegen-instruction [::function-start ::x86-64] [start loc-mapper]
+  (when-not (empty? (::params start))
+    (throw (Exception. "parameters for function not supported yet.")))
+  ["pushq %rbp"
+    "movq %rsp, %rbp"])
 
 (def print-code
   [(str (label-string :print) ":")
@@ -344,7 +363,7 @@
 (defmethod codegen-continuation [::if-then-else ::x86-64] [ite loc-mapper]
   (let [test-loc (loc-mapper (::test ite))
         test-loc-code (read-location test-loc)]
-    [(str "cmp $0, " test-loc-code)
+    [(str "cmp" (size-suffix test-loc) " $0, " test-loc-code)
      (str "jne " (label-string (::then ite)))
      (str "jmp " (label-string (::else ite)))]))
 
@@ -453,14 +472,38 @@
 (defmethod codegen-instruction [::bitwise-not ::x86-64] [instr loc-mapper]
   (codegen-unop "not" instr loc-mapper))
 
+(defmethod special-register? ::accumulator [_] true)
 (defmethod codegen-instruction [::bool-not ::x86-64] [instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
+        t-loc (loc-mapper (::target instr))]
+    (when (not=  32 (::size a-loc) (::size t-loc))
+      (throw (Exception. "boolean negation requires the input and output to be 32 bit")))
+    [(str "cmpl $0, " (read-location a-loc))
+     "setz %al"
+     "movzbl %al, %eax"
+     (str "movl %eax, " (read-location t-loc))]))
+
+(defmethod codegen-instruction [::equal? ::x86-64] [instr loc-mapper]
+  (let [a-loc (loc-mapper (::a instr))
+        b-loc (loc-mapper (::b instr))
         t-loc (loc-mapper (::target instr))
-        h-loc (loc-mapper ::helper)]
-    [(make-code "mov" a-loc h-loc)
-     "cmp $0, " (read-location h-loc)
-     (make-code "setz " (assoc h-loc ::size 8))
-     (make-code "movz" (assoc h-loc ::size 8) t-loc)]))
+        acc-loc (loc-of-reg ::accumulator (::size a-loc))]
+    [(make-code "mov" a-loc acc-loc)
+     (make-code "cmp" acc-loc b-loc)
+     "sete %al"
+     "movzbl %al, %eax"
+     (str "movl %eax, " (read-location t-loc))]))
+
+(defmethod codegen-instruction [::not-equal? ::x86-64] [instr loc-mapper]
+  (let [a-loc (loc-mapper (::a instr))
+        b-loc (loc-mapper (::b instr))
+        t-loc (loc-mapper (::target instr))
+        acc-loc (loc-of-reg ::accumulator (::size a-loc))]
+    [(make-code "mov" a-loc acc-loc)
+     (make-code "cmp" acc-loc b-loc)
+     "setne %al"
+     "movzbl %al, %eax"
+     (str "movl %eax, " (read-location t-loc))]))
 
 (defn- codegen-shift [name instr loc-mapper]
   (let [a-loc (loc-mapper (::a instr))
